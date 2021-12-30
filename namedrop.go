@@ -30,8 +30,13 @@ type AuthRequest struct {
 }
 
 type TokenData struct {
-	Owner string `json:"owner"`
-	Scope string `json:"scope"`
+	Owner  string  `json:"owner"`
+	Scopes []Scope `json:"scopes"`
+}
+
+type Scope struct {
+	Domain string `json:"domain"`
+	Host   string `json:"host"`
 }
 
 type PendingToken struct {
@@ -41,6 +46,19 @@ type PendingToken struct {
 type Oauth2TokenResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`
+}
+
+type Record struct {
+	Domain   string `json:"domain"`
+	Host     string `json:"host"`
+	Type     string `json:"type"`
+	Value    string `json:"value"`
+	TTL      uint32 `json:"ttl"`
+	Priority int    `json:"priority"`
+}
+
+type CreateRecordsRequest struct {
+	Records []Record
 }
 
 func NewApi(db Database) *Api {
@@ -158,12 +176,7 @@ func (a *Api) ExtractAuthRequest(r *http.Request) (*AuthRequest, error) {
 	return req, nil
 }
 
-func (a *Api) CreateCode(user, scope string) string {
-
-	tokenData := TokenData{
-		Owner: user,
-		Scope: scope,
-	}
+func (a *Api) CreateCode(tokenData TokenData) string {
 
 	token, _ := genRandomKey()
 
@@ -178,6 +191,56 @@ func (a *Api) CreateCode(user, scope string) string {
 	a.db.SetPendingToken(code, pendingToken)
 
 	return code
+}
+
+func (a *Api) Authorized(r *http.Request) (*Record, error) {
+	token, err := extractToken("access_token", r)
+	if err != nil {
+		return nil, err
+	}
+
+	bodyJson, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var record *Record
+	err = json.Unmarshal(bodyJson, &record)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenData, err := a.db.GetToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasPerm(record, tokenData.Scopes) {
+		return nil, errors.New("No perms")
+	}
+
+	return record, nil
+}
+
+// TODO: Test this
+func hasPerm(record *Record, scopes []Scope) bool {
+	for _, scope := range scopes {
+		if record.Domain != scope.Domain {
+			continue
+		}
+
+		if strings.HasPrefix(scope.Host, "*") {
+			if !strings.HasSuffix(record.Host, scope.Host[1:]) {
+				continue
+			}
+		} else if record.Host != scope.Host {
+			continue
+		}
+
+		return true
+	}
+
+	return false
 }
 
 func genRandomKey() (string, error) {
