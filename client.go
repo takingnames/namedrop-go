@@ -162,6 +162,7 @@ func (c *Client) CreateRecord(record Record) error {
 	for token, tokenData := range tokens {
 		if hasPerm(&record, tokenData.Scopes) {
 			accessToken = token
+			break
 		}
 	}
 
