@@ -72,7 +72,7 @@ func NewApi(db Database) *Api {
 	mux.HandleFunc("/token", a.handleToken)
 	mux.HandleFunc("/token-data", a.handleTokenData)
 	mux.HandleFunc("/my-ip", func(w http.ResponseWriter, r *http.Request) {
-		ip := readRemoteIp(r)
+		ip := ReadRemoteIp(r)
 		io.WriteString(w, ip)
 	})
 
@@ -279,7 +279,7 @@ func extractToken(tokenName string, r *http.Request) (string, error) {
 	return "", errors.New("No token found")
 }
 
-func readRemoteIp(r *http.Request) string {
+func ReadRemoteIp(r *http.Request) string {
 
 	xffHeader := r.Header.Get("X-Forwarded-For")
 
