@@ -204,19 +204,9 @@ func (a *Server) Authorized(r *http.Request) (*Record, error) {
 // TODO: Test this
 func hasPerm(record *Record, scopes []Scope) bool {
 	for _, scope := range scopes {
-		if record.Domain != scope.Domain {
-			continue
+		if record.Domain == scope.Domain && record.Host == scope.Host {
+			return true
 		}
-
-		if strings.HasPrefix(scope.Host, "*") {
-			if !strings.HasSuffix(record.Host, scope.Host[1:]) {
-				continue
-			}
-		} else if record.Host != scope.Host {
-			continue
-		}
-
-		return true
 	}
 
 	return false
