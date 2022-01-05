@@ -37,3 +37,13 @@ func genRandomKey() (string, error) {
 	}
 	return id, nil
 }
+
+func hasPerm(record *Record, scopes []Scope) bool {
+	for _, scope := range scopes {
+		if record.Domain == scope.Domain && record.Host == scope.Host {
+			return true
+		}
+	}
+
+	return false
+}

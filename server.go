@@ -201,17 +201,6 @@ func (a *Server) Authorized(r *http.Request) (*Record, error) {
 	return record, nil
 }
 
-// TODO: Test this
-func hasPerm(record *Record, scopes []Scope) bool {
-	for _, scope := range scopes {
-		if record.Domain == scope.Domain && record.Host == scope.Host {
-			return true
-		}
-	}
-
-	return false
-}
-
 func extractToken(tokenName string, r *http.Request) (string, error) {
 
 	query := r.URL.Query()
