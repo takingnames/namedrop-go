@@ -174,7 +174,7 @@ func (c *Client) CreateRecord(record Record) error {
 	url := fmt.Sprintf("https://%s/records?access_token=%s", c.providerUri, accessToken)
 	c.mut.Unlock()
 
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(createRecordReqJson))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(createRecordReqJson))
 	if err != nil {
 		return err
 	}
