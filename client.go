@@ -76,7 +76,7 @@ func (c *Client) buildOauthConfig() *oauth2.Config {
 			AuthURL:  fmt.Sprintf("https://%s/authorize", c.providerUri),
 			TokenURL: fmt.Sprintf("https://%s/token", c.providerUri),
 		},
-		RedirectURL: fmt.Sprintf("%s/namedrop/auth-success", c.domain),
+		RedirectURL: fmt.Sprintf("%s/namedrop/callback", c.domain),
 	}
 
 	return oauthConf
