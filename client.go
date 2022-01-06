@@ -225,6 +225,10 @@ func (c *Client) GetPublicIp() (string, error) {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.New("Invalid HTTP code getting public IP")
+	}
+
 	ip := string(body)
 
 	if ip == "" {
