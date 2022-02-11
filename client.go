@@ -262,7 +262,7 @@ func CheckPublicAddress(host string, port int) error {
 		}
 	}()
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", addr, time.Second)
 	if err != nil {
 		return err
