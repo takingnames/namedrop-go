@@ -217,8 +217,29 @@ func (c *Client) GetIpDomain() (string, error) {
 	return string(body), nil
 }
 
-func (c *Client) GetPublicIp() (string, error) {
-	resp, err := http.Get(fmt.Sprintf("https://%s/my-ip", c.providerUri))
+func (c *Client) GetPublicIpv4() (string, error) {
+	return c.GetPublicIp("tcp4")
+}
+
+func (c *Client) GetPublicIpv6() (string, error) {
+	return c.GetPublicIp("tcp6")
+}
+
+func (c *Client) GetPublicIp(network string) (string, error) {
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	var dialer net.Dialer
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = func(ctx context.Context, networkNotUsed, addr string) (net.Conn, error) {
+		return dialer.DialContext(ctx, network, addr)
+	}
+
+	httpClient.Transport = transport
+
+	resp, err := httpClient.Get(fmt.Sprintf("https://%s/my-ip", c.providerUri))
 	if err != nil {
 		return "", err
 	}
