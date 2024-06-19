@@ -6,8 +6,8 @@ import (
 )
 
 type TokenData struct {
-	Owner  string  `json:"owner"`
-	Scopes []Scope `json:"scopes"`
+	OwnerId string  `json:"owner_id"`
+	Scopes  []Scope `json:"scopes"`
 }
 
 type Scope struct {
