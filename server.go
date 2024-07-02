@@ -30,11 +30,6 @@ type PendingToken struct {
 
 type AuthRequest = oauth.AuthRequest
 
-type Oauth2TokenResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-}
-
 func NewServer(db Database) *Server {
 
 	a := &Server{
@@ -78,7 +73,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := Oauth2TokenResponse{
+	resp := oauth.TokenResponse{
 		AccessToken: token,
 		TokenType:   "bearer",
 	}
