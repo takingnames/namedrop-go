@@ -1,11 +1,15 @@
 package namedrop
 
 import (
+	//"fmt"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+
+	oauth "github.com/anderspitman/little-oauth2-go"
 )
 
 type Database interface {
@@ -20,16 +24,11 @@ type Server struct {
 	mux *http.ServeMux
 }
 
-type AuthRequest struct {
-	ClientId    string
-	RedirectUri string
-	Scope       string
-	State       string
+type PendingToken struct {
+	AuthRequestState string
 }
 
-type PendingToken struct {
-	Token string `json:"token"`
-}
+type AuthRequest = oauth.AuthRequest
 
 type Oauth2TokenResponse struct {
 	AccessToken string `json:"access_token"`
@@ -63,9 +62,16 @@ func (a *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
-	code := r.Form.Get("code")
+	codeData, err := a.db.GetPendingToken(r.Form.Get("code"))
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, err.Error())
+		return
+	}
 
-	codeData, err := a.db.GetPendingToken(code)
+	token, err := oauth.ParseTokenRequest(r.Form, codeData.AuthRequestState, oauth.Options{
+		AllowMissingPkce: true,
+	})
 	if err != nil {
 		w.WriteHeader(500)
 		io.WriteString(w, err.Error())
@@ -73,7 +79,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := Oauth2TokenResponse{
-		AccessToken: codeData.Token,
+		AccessToken: token,
 		TokenType:   "bearer",
 	}
 
@@ -118,44 +124,36 @@ func (a *Server) handleTokenData(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonStr)
 }
 
-func (a *Server) ExtractAuthRequest(r *http.Request) (*AuthRequest, error) {
-	r.ParseForm()
+func ParseAuthRequest(params url.Values) (*AuthRequest, error) {
 
-	clientId := r.Form.Get("client_id")
-	if clientId == "" {
-		return nil, errors.New("Missing client_id param")
+	req, err := oauth.ParseAuthRequest(params, oauth.Options{
+		AllowMissingPkce: true,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	redirectUri := r.Form.Get("redirect_uri")
-	if redirectUri == "" {
-		return nil, errors.New("Missing redirect_uri param")
+	parsedClientIdUri, err := url.Parse(req.ClientId)
+	if err != nil {
+		msg := "client_id is not a valid URI"
+		return nil, errors.New(msg)
 	}
 
-	if !strings.HasPrefix(redirectUri, clientId) {
+	parsedRedirectUri, err := url.Parse(req.RedirectUri)
+	if err != nil {
+		msg := "redirect_uri is not a valid URI"
+		return nil, errors.New(msg)
+	}
+
+	// draft-ietf-oauth-security-topics-24 4.1
+	if parsedClientIdUri.Host != parsedRedirectUri.Host {
 		return nil, errors.New("redirect_uri must be on the same domain as client_id")
-	}
-
-	scope := r.Form.Get("scope")
-	if scope == "" {
-		return nil, errors.New("Missing scope param")
-	}
-
-	state := r.Form.Get("state")
-	if state == "" {
-		return nil, errors.New("state param can't be empty")
-	}
-
-	req := &AuthRequest{
-		ClientId:    clientId,
-		RedirectUri: redirectUri,
-		Scope:       scope,
-		State:       state,
 	}
 
 	return req, nil
 }
 
-func (a *Server) CreateCode(tokenData TokenData) string {
+func (a *Server) CreateCode(tokenData TokenData, authReqParams string) string {
 
 	token, _ := genRandomKey()
 
@@ -163,8 +161,10 @@ func (a *Server) CreateCode(tokenData TokenData) string {
 
 	code, _ := genRandomKey()
 
+	authReqState := oauth.EncodeAuthRequestState(token, authReqParams)
+
 	pendingToken := PendingToken{
-		Token: token,
+		AuthRequestState: authReqState,
 	}
 
 	a.db.SetPendingToken(code, pendingToken)
