@@ -13,8 +13,8 @@ import (
 )
 
 type Database interface {
-	SetToken(token string, tokenData TokenData)
-	GetToken(token string) (TokenData, error)
+	SetToken(token string, tokenData *TokenData)
+	GetToken(token string) (*TokenData, error)
 	SetPendingToken(code string, tok PendingToken)
 	GetPendingToken(code string) (PendingToken, error)
 }
@@ -57,25 +57,57 @@ func (a *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
-	codeData, err := a.db.GetPendingToken(r.Form.Get("code"))
+	grantType := r.Form.Get("grant_type")
+
+	var refreshToken string
+	var err error
+
+	if grantType == "authorization_code" {
+		codeData, err := a.db.GetPendingToken(r.Form.Get("code"))
+		if err != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, err.Error())
+			return
+		}
+
+		refreshToken, err = oauth.ParseTokenRequest(r.Form, codeData.AuthRequestState, oauth.Options{
+			AllowMissingPkce: true,
+		})
+		if err != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, err.Error())
+			return
+		}
+	} else if grantType == "refresh_token" {
+		refreshToken, err = oauth.ParseRefreshRequest(r.Form)
+		if err != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, err.Error())
+			return
+		}
+	}
+
+	tokenData, err := a.db.GetToken(refreshToken)
 	if err != nil {
 		w.WriteHeader(500)
 		io.WriteString(w, err.Error())
 		return
 	}
 
-	token, err := oauth.ParseTokenRequest(r.Form, codeData.AuthRequestState, oauth.Options{
-		AllowMissingPkce: true,
-	})
-	if err != nil {
-		w.WriteHeader(500)
-		io.WriteString(w, err.Error())
-		return
-	}
+	// TODO: make sure token is valid
+
+	// TODO: set IssuedAt to current time
+	//tokenData.IssuedAt =
+	tokenData.ExpiresIn = 3600
+
+	accessToken, _ := genRandomKey()
+	a.db.SetToken(accessToken, tokenData)
 
 	resp := oauth.TokenResponse{
-		AccessToken: token,
-		TokenType:   "bearer",
+		AccessToken:  accessToken,
+		TokenType:    "bearer",
+		ExpiresIn:    3600,
+		RefreshToken: refreshToken,
 	}
 
 	jsonStr, err := json.MarshalIndent(resp, "", "  ")
@@ -148,7 +180,7 @@ func ParseAuthRequest(params url.Values) (*AuthRequest, error) {
 	return req, nil
 }
 
-func (a *Server) CreateCode(tokenData TokenData, authReqParams string) string {
+func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 
 	token, _ := genRandomKey()
 
