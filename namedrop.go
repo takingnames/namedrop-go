@@ -11,13 +11,14 @@ import (
 type AuthRequest = oauth.AuthRequest
 
 type Database interface {
-	SetToken(token string, tokenData *TokenData)
-	GetToken(token string) (*TokenData, error)
+	SetTokenData(tokenData *TokenData)
+	GetTokenData(token string) (*TokenData, error)
 	SetPendingToken(code string, tok PendingToken)
 	GetPendingToken(code string) (PendingToken, error)
 }
 
 type TokenData struct {
+	Token     string    `json:"token" db:"token"`
 	OwnerId   string    `json:"owner_id" db:"owner_id"`
 	Scopes    []Scope   `json:"scopes" db:"scopes"`
 	IssuedAt  time.Time `json:"issued_at" db:"issued_at"`

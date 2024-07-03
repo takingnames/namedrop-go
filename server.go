@@ -73,7 +73,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tokenData, err := a.db.GetToken(refreshToken)
+	tokenData, err := a.db.GetTokenData(refreshToken)
 	if err != nil {
 		w.WriteHeader(500)
 		io.WriteString(w, err.Error())
@@ -93,7 +93,8 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	tokenData.ExpiresIn = expiresInSeconds
 
 	accessToken, _ := genRandomKey()
-	a.db.SetToken(accessToken, tokenData)
+	tokenData.Token = accessToken
+	a.db.SetTokenData(tokenData)
 
 	resp := oauth.TokenResponse{
 		AccessToken:  accessToken,
@@ -124,7 +125,7 @@ func (a *Server) handleTokenData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenData, err := a.db.GetToken(token)
+	tokenData, err := a.db.GetTokenData(token)
 	if err != nil {
 		w.WriteHeader(400)
 		io.WriteString(w, err.Error())
@@ -174,10 +175,11 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 
 	token, _ := genRandomKey()
 
+	tokenData.Token = token
 	tokenData.IssuedAt = time.Now().UTC()
 	tokenData.ExpiresIn = 0
 
-	a.db.SetToken(token, tokenData)
+	a.db.SetTokenData(tokenData)
 
 	code, _ := genRandomKey()
 
@@ -209,7 +211,7 @@ func (a *Server) Authorized(r *http.Request) (*Record, error) {
 		return nil, err
 	}
 
-	tokenData, err := a.db.GetToken(token)
+	tokenData, err := a.db.GetTokenData(token)
 	if err != nil {
 		return nil, err
 	}
