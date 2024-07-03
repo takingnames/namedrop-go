@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	oauth "github.com/anderspitman/little-oauth2-go"
 )
@@ -79,11 +80,17 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: make sure token is valid
+	if tokenData.ExpiresIn != 0 {
+		if err != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, "Attempted to use non-refresh token to refresh")
+			return
+		}
+	}
 
-	// TODO: set IssuedAt to current time
-	//tokenData.IssuedAt =
-	tokenData.ExpiresIn = 3600
+	tokenData.IssuedAt = time.Now().UTC()
+	expiresInSeconds := 3600
+	tokenData.ExpiresIn = expiresInSeconds
 
 	accessToken, _ := genRandomKey()
 	a.db.SetToken(accessToken, tokenData)
@@ -91,7 +98,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	resp := oauth.TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "bearer",
-		ExpiresIn:    3600,
+		ExpiresIn:    expiresInSeconds,
 		RefreshToken: refreshToken,
 	}
 
@@ -166,6 +173,9 @@ func ParseAuthRequest(params url.Values) (*AuthRequest, error) {
 func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 
 	token, _ := genRandomKey()
+
+	tokenData.IssuedAt = time.Now().UTC()
+	tokenData.ExpiresIn = 0
 
 	a.db.SetToken(token, tokenData)
 

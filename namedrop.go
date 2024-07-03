@@ -3,6 +3,7 @@ package namedrop
 import (
 	"crypto/rand"
 	"math/big"
+	"time"
 
 	oauth "github.com/anderspitman/little-oauth2-go"
 )
@@ -17,10 +18,10 @@ type Database interface {
 }
 
 type TokenData struct {
-	OwnerId   string  `json:"owner_id"`
-	Scopes    []Scope `json:"scopes"`
-	IssuedAt  int     `json:"issued_at"`
-	ExpiresIn int     `json":expires_in"`
+	OwnerId   string    `json:"owner_id" db:"owner_id"`
+	Scopes    []Scope   `json:"scopes" db:"scopes"`
+	IssuedAt  time.Time `json:"issued_at" db:"issued_at"`
+	ExpiresIn int       `json:"expires_in" db:"expires_in"`
 }
 
 type PendingToken struct {
