@@ -12,23 +12,10 @@ import (
 	oauth "github.com/anderspitman/little-oauth2-go"
 )
 
-type Database interface {
-	SetToken(token string, tokenData *TokenData)
-	GetToken(token string) (*TokenData, error)
-	SetPendingToken(code string, tok PendingToken)
-	GetPendingToken(code string) (PendingToken, error)
-}
-
 type Server struct {
 	db  Database
 	mux *http.ServeMux
 }
-
-type PendingToken struct {
-	AuthRequestState string
-}
-
-type AuthRequest = oauth.AuthRequest
 
 func NewServer(db Database) *Server {
 
