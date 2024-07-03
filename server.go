@@ -70,9 +70,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		refreshToken, err = oauth.ParseTokenRequest(r.Form, codeData.AuthRequestState, oauth.Options{
-			AllowMissingPkce: true,
-		})
+		refreshToken, err = oauth.ParseTokenRequest(r.Form, codeData.AuthRequestState)
 		if err != nil {
 			w.WriteHeader(500)
 			io.WriteString(w, err.Error())
@@ -153,9 +151,7 @@ func (a *Server) handleTokenData(w http.ResponseWriter, r *http.Request) {
 
 func ParseAuthRequest(params url.Values) (*AuthRequest, error) {
 
-	req, err := oauth.ParseAuthRequest(params, oauth.Options{
-		AllowMissingPkce: true,
-	})
+	req, err := oauth.ParseAuthRequest(params)
 	if err != nil {
 		return nil, err
 	}
