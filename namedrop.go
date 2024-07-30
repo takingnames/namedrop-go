@@ -34,6 +34,11 @@ type Scope struct {
 	Host   string `json:"host"`
 }
 
+type Permission struct {
+	Domain string `json:"domain"`
+	Host   string `json:"host"`
+}
+
 type Record struct {
 	Domain   string `json:"domain"`
 	Host     string `json:"host"`
@@ -41,6 +46,11 @@ type Record struct {
 	Value    string `json:"value"`
 	TTL      uint32 `json:"ttl"`
 	Priority int    `json:"priority"`
+}
+
+type TokenResponse struct {
+        oauth.TokenResponse
+        Permissions []Scope `json:"permissions"`
 }
 
 func genRandomKey() (string, error) {

@@ -45,6 +45,8 @@ func (a *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	grantType := r.Form.Get("grant_type")
 
 	var refreshToken string
@@ -64,7 +66,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, err.Error())
 			return
 		}
-	} else if grantType == "refresh_token" {
+	} else {
 		refreshToken, err = oauth.ParseRefreshRequest(r.Form)
 		if err != nil {
 			w.WriteHeader(500)
@@ -96,11 +98,14 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	tokenData.Token = accessToken
 	a.db.SetTokenData(tokenData)
 
-	resp := oauth.TokenResponse{
-		AccessToken:  accessToken,
-		TokenType:    "bearer",
-		ExpiresIn:    expiresInSeconds,
-		RefreshToken: refreshToken,
+	resp := TokenResponse{
+                oauth.TokenResponse{
+                        AccessToken:  accessToken,
+                        TokenType:    "bearer",
+                        ExpiresIn:    expiresInSeconds,
+                        RefreshToken: refreshToken,
+                },
+                tokenData.Scopes,
 	}
 
 	jsonStr, err := json.MarshalIndent(resp, "", "  ")
