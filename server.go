@@ -231,6 +231,11 @@ func (a *Server) Authorized(r *http.Request) (*Record, error) {
 		return nil, err
 	}
 
+	if oauth.Expired(tokenData.IssuedAt, tokenData.ExpiresIn) {
+		// TODO: delete token
+		return nil, errors.New("Token expired")
+	}
+
 	if !hasPerm(record, tokenData.Scopes) {
 		return nil, errors.New("No perms")
 	}
