@@ -15,6 +15,7 @@ type Database interface {
 	GetTokenData(token string) (*TokenData, error)
 	SetPendingToken(code string, tok PendingToken)
 	GetPendingToken(code string) (PendingToken, error)
+	DeletePendingToken(code string) error
 }
 
 type TokenData struct {
@@ -49,8 +50,8 @@ type Record struct {
 }
 
 type TokenResponse struct {
-        oauth.TokenResponse
-        Permissions []Scope `json:"permissions"`
+	oauth.TokenResponse
+	Permissions []Scope `json:"permissions"`
 }
 
 func genRandomKey() (string, error) {

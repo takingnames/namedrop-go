@@ -53,7 +53,10 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if grantType == "authorization_code" {
-		codeData, err := a.db.GetPendingToken(r.Form.Get("code"))
+
+		code := r.Form.Get("code")
+
+		codeData, err := a.db.GetPendingToken(code)
 		if err != nil {
 			w.WriteHeader(500)
 			io.WriteString(w, err.Error())
@@ -61,6 +64,13 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		}
 
 		refreshToken, err = oauth.ParseTokenRequest(r.Form, codeData.AuthRequestState)
+		if err != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, err.Error())
+			return
+		}
+
+		err = a.db.DeletePendingToken(code)
 		if err != nil {
 			w.WriteHeader(500)
 			io.WriteString(w, err.Error())
@@ -99,13 +109,13 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	a.db.SetTokenData(tokenData)
 
 	resp := TokenResponse{
-                oauth.TokenResponse{
-                        AccessToken:  accessToken,
-                        TokenType:    "bearer",
-                        ExpiresIn:    expiresInSeconds,
-                        RefreshToken: refreshToken,
-                },
-                tokenData.Scopes,
+		oauth.TokenResponse{
+			AccessToken:  accessToken,
+			TokenType:    "bearer",
+			ExpiresIn:    expiresInSeconds,
+			RefreshToken: refreshToken,
+		},
+		tokenData.Scopes,
 	}
 
 	jsonStr, err := json.MarshalIndent(resp, "", "  ")
