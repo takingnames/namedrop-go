@@ -1,7 +1,6 @@
 package namedrop
 
 import (
-	//"fmt"
 	"encoding/json"
 	"errors"
 	"io"
@@ -115,7 +114,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 			ExpiresIn:    expiresInSeconds,
 			RefreshToken: refreshToken,
 		},
-		tokenData.Scopes,
+		tokenData.Permissions,
 	}
 
 	jsonStr, err := json.MarshalIndent(resp, "", "  ")
@@ -183,7 +182,18 @@ func ParseAuthRequest(params url.Values) (*AuthRequest, error) {
 		return nil, errors.New("redirect_uri must be on the same domain as client_id")
 	}
 
-	return req, nil
+	perms := strings.Split(req.Scope, " ")
+	reqPerms, err := scopesToPerms(perms)
+	if err != nil {
+		return nil, err
+	}
+
+	ar := &AuthRequest{
+		AuthRequest:          req,
+		RequestedPermissions: reqPerms,
+	}
+
+	return ar, nil
 }
 
 func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
@@ -207,6 +217,27 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 	a.db.SetPendingToken(code, pendingToken)
 
 	return code
+}
+
+func (a *Server) AuthorizedReq(token string, records []*Record) error {
+
+	tokenData, err := a.db.GetTokenData(token)
+	if err != nil {
+		return err
+	}
+
+	if oauth.Expired(tokenData.IssuedAt, tokenData.ExpiresIn) {
+		// TODO: delete token
+		return errors.New("Token expired")
+	}
+
+	for _, record := range records {
+		if !hasPerm(record, tokenData.Permissions) {
+			return errors.New("Insufficient perms")
+		}
+	}
+
+	return nil
 }
 
 func (a *Server) Authorized(r *http.Request) (*Record, error) {
@@ -236,7 +267,7 @@ func (a *Server) Authorized(r *http.Request) (*Record, error) {
 		return nil, errors.New("Token expired")
 	}
 
-	if !hasPerm(record, tokenData.Scopes) {
+	if !hasPerm(record, tokenData.Permissions) {
 		return nil, errors.New("No perms")
 	}
 
@@ -277,4 +308,20 @@ func ReadRemoteIp(r *http.Request) string {
 	}
 
 	return ip
+}
+
+func scopesToPerms(scopes []string) ([]*Permission, error) {
+
+	reqPerms := []*Permission{}
+
+	for _, scope := range scopes {
+
+		reqPerm := &Permission{
+			Scope: scope,
+		}
+
+		reqPerms = append(reqPerms, reqPerm)
+	}
+
+	return reqPerms, nil
 }

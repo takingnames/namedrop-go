@@ -137,7 +137,7 @@ func (c *Client) GetToken(requestId, code string) (*TokenData, error) {
 		return nil, err
 	}
 
-	if len(namedropTokenData.Scopes) < 1 {
+	if len(namedropTokenData.Permissions) < 1 {
 		return nil, errors.New("No scopes returned")
 	}
 
@@ -160,7 +160,7 @@ func (c *Client) CreateRecord(record Record) error {
 
 	accessToken := ""
 	for token, tokenData := range tokens {
-		if hasPerm(&record, tokenData.Scopes) {
+		if hasPerm(&record, tokenData.Permissions) {
 			accessToken = token
 			break
 		}

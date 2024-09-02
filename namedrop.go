@@ -2,13 +2,23 @@ package namedrop
 
 import (
 	"crypto/rand"
+	"encoding/json"
+	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	oauth "github.com/anderspitman/little-oauth2-go"
 )
 
-type AuthRequest = oauth.AuthRequest
+const ScopeServers = "servers"
+const ScopeMail = "mail"
+const ScopeAcme = "acme"
+
+type AuthRequest struct {
+	*oauth.AuthRequest
+	RequestedPermissions []*Permission
+}
 
 type Database interface {
 	SetTokenData(tokenData *TokenData)
@@ -19,11 +29,11 @@ type Database interface {
 }
 
 type TokenData struct {
-	Token     string    `json:"token" db:"token"`
-	OwnerId   string    `json:"owner_id" db:"owner_id"`
-	Scopes    []Scope   `json:"scopes" db:"scopes"`
-	IssuedAt  time.Time `json:"issued_at" db:"issued_at"`
-	ExpiresIn int       `json:"expires_in" db:"expires_in"`
+	Token       string        `json:"token" db:"token"`
+	OwnerId     string        `json:"owner_id" db:"owner_id"`
+	Permissions []*Permission `json:"permissions" db:"permissions"`
+	IssuedAt    time.Time     `json:"issued_at" db:"issued_at"`
+	ExpiresIn   int           `json:"expires_in" db:"expires_in"`
 }
 
 type PendingToken struct {
@@ -36,6 +46,7 @@ type Scope struct {
 }
 
 type Permission struct {
+	Scope  string `json:"scope"`
 	Domain string `json:"domain"`
 	Host   string `json:"host"`
 }
@@ -51,7 +62,7 @@ type Record struct {
 
 type TokenResponse struct {
 	oauth.TokenResponse
-	Permissions []Scope `json:"permissions"`
+	Permissions []*Permission `json:"permissions"`
 }
 
 func genRandomKey() (string, error) {
@@ -68,12 +79,62 @@ func genRandomKey() (string, error) {
 	return id, nil
 }
 
-func hasPerm(record *Record, scopes []Scope) bool {
-	for _, scope := range scopes {
-		if record.Domain == scope.Domain && record.Host == scope.Host {
+func hasPerm(record *Record, perms []*Permission) bool {
+	for _, perm := range perms {
+		if checkPerm(record, perm) {
 			return true
 		}
 	}
 
 	return false
+}
+
+func checkPerm(r *Record, p *Permission) bool {
+	switch r.Type {
+	case "A":
+		fallthrough
+	case "AAAA":
+		fallthrough
+	case "CNAME":
+
+		domainParts := strings.Split(r.Host, ".")
+		if len(domainParts) > 1 && domainParts[1] == "_domainkey" {
+			return p.Scope == ScopeMail && r.Domain == p.Domain
+		}
+
+		if p.Scope != ScopeServers {
+			return false
+		}
+
+	case "MX":
+		if p.Scope != ScopeMail {
+			return false
+		}
+	case "TXT":
+		if strings.HasPrefix(r.Host, "_acme-challenge") {
+			return p.Scope == ScopeAcme && r.Domain == p.Domain
+		}
+
+		trimmedValue := strings.TrimSpace(r.Value)
+		if strings.HasPrefix(trimmedValue, "v=spf1") {
+			return p.Scope == ScopeMail
+		}
+
+		domainParts := strings.Split(r.Host, ".")
+		if len(domainParts) > 1 && domainParts[1] == "_domainkey" {
+			return p.Scope == ScopeMail && r.Domain == p.Domain
+		}
+
+		return false
+
+	default:
+		return false
+	}
+
+	return r.Domain == p.Domain && r.Host == p.Host
+}
+
+func printJson(data interface{}) {
+	d, _ := json.MarshalIndent(data, "", "  ")
+	fmt.Println(string(d))
 }
