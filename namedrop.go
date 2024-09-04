@@ -11,9 +11,9 @@ import (
 	oauth "github.com/anderspitman/little-oauth2-go"
 )
 
-const ScopeServers = "servers"
-const ScopeMail = "mail"
-const ScopeAcme = "acme"
+const ScopeHosts = "namedrop-hosts"
+const ScopeMail = "namedrop-mail"
+const ScopeAcme = "namedrop-acme"
 
 type AuthRequest struct {
 	*oauth.AuthRequest
@@ -102,7 +102,7 @@ func checkPerm(r *Record, p *Permission) bool {
 			return p.Scope == ScopeMail && r.Domain == p.Domain
 		}
 
-		if p.Scope != ScopeServers {
+		if p.Scope != ScopeHosts {
 			return false
 		}
 
