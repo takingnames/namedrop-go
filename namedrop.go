@@ -95,6 +95,8 @@ func checkPerm(r *Record, p *Permission) bool {
 		fallthrough
 	case "AAAA":
 		fallthrough
+	case "ANAME":
+		fallthrough
 	case "CNAME":
 
 		domainParts := strings.Split(r.Host, ".")
