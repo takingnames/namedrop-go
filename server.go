@@ -219,7 +219,7 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 	return code
 }
 
-func (a *Server) AuthorizedReq(token string, records []*Record) error {
+func (a *Server) Authorized(token string, records []*Record) error {
 
 	tokenData, err := a.db.GetTokenData(token)
 	if err != nil {
@@ -238,40 +238,6 @@ func (a *Server) AuthorizedReq(token string, records []*Record) error {
 	}
 
 	return nil
-}
-
-func (a *Server) Authorized(r *http.Request) (*Record, error) {
-	token, err := extractToken("access_token", r)
-	if err != nil {
-		return nil, err
-	}
-
-	bodyJson, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var record *Record
-	err = json.Unmarshal(bodyJson, &record)
-	if err != nil {
-		return nil, err
-	}
-
-	tokenData, err := a.db.GetTokenData(token)
-	if err != nil {
-		return nil, err
-	}
-
-	if oauth.Expired(tokenData.IssuedAt, tokenData.ExpiresIn) {
-		// TODO: delete token
-		return nil, errors.New("Token expired")
-	}
-
-	if !hasPerm(record, tokenData.Permissions) {
-		return nil, errors.New("No perms")
-	}
-
-	return record, nil
 }
 
 func extractToken(tokenName string, r *http.Request) (string, error) {
