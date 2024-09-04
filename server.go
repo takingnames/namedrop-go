@@ -3,6 +3,7 @@ package namedrop
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -282,6 +283,10 @@ func scopesToPerms(scopes []string) ([]*Permission, error) {
 
 	for _, scope := range scopes {
 
+		if !validScope(scope) {
+			return nil, fmt.Errorf("Invalid scope '%s'\n", scope)
+		}
+
 		reqPerm := &Permission{
 			Scope: scope,
 		}
@@ -290,4 +295,8 @@ func scopesToPerms(scopes []string) ([]*Permission, error) {
 	}
 
 	return reqPerms, nil
+}
+
+func validScope(s string) bool {
+	return s == ScopeHosts || s == ScopeMail || s == ScopeAcme
 }
