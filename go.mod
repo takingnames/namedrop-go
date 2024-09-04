@@ -1,14 +1,16 @@
 module github.com/takingnames/namedrop-go
 
-go 1.17
+go 1.22.4
+
+toolchain go1.22.6
 
 require (
+	github.com/anderspitman/little-oauth2-go v0.0.0-20240904162115-5d18e06f4a81
 	github.com/caddyserver/certmagic v0.15.2
-	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
+	golang.org/x/oauth2 v0.23.0
 )
 
 require (
-	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/libdns/libdns v0.2.1 // indirect
 	github.com/mholt/acmez v1.0.1 // indirect
@@ -20,6 +22,4 @@ require (
 	golang.org/x/net v0.0.0-20210525063256-abc453219eb5 // indirect
 	golang.org/x/sys v0.0.0-20210423082822-04245dca01da // indirect
 	golang.org/x/text v0.3.6 // indirect
-	google.golang.org/appengine v1.6.6 // indirect
-	google.golang.org/protobuf v1.25.0 // indirect
 )
