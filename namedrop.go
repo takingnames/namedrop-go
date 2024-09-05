@@ -108,7 +108,7 @@ func checkPerm(r *Record, p *Permission) bool {
 
 		domainParts := strings.Split(r.Host, ".")
 		if len(domainParts) > 1 && domainParts[1] == "_domainkey" {
-			return p.Scope == ScopeMail && r.Domain == p.Domain
+			return p.Scope == ScopeMail && commonChecks(r, p)
 		}
 
 		if p.Scope != ScopeHosts {
@@ -121,17 +121,17 @@ func checkPerm(r *Record, p *Permission) bool {
 		}
 	case "TXT":
 		if strings.HasPrefix(r.Host, "_acme-challenge") {
-			return p.Scope == ScopeAcme && r.Domain == p.Domain
+			return p.Scope == ScopeAcme && commonChecks(r, p)
 		}
 
 		trimmedValue := strings.TrimSpace(r.Value)
 		if strings.HasPrefix(trimmedValue, "v=spf1") {
-			return p.Scope == ScopeMail
+			return p.Scope == ScopeMail && commonChecks(r, p)
 		}
 
 		domainParts := strings.Split(r.Host, ".")
 		if len(domainParts) > 1 && domainParts[1] == "_domainkey" {
-			return p.Scope == ScopeMail && r.Domain == p.Domain
+			return p.Scope == ScopeMail && commonChecks(r, p)
 		}
 
 		return false
@@ -140,7 +140,11 @@ func checkPerm(r *Record, p *Permission) bool {
 		return false
 	}
 
-	return r.Domain == p.Domain && r.Host == p.Host
+	return commonChecks(r, p)
+}
+
+func commonChecks(r *Record, p *Permission) bool {
+	return r.Domain == p.Domain && strings.HasSuffix(r.Host, p.Host)
 }
 
 func printJson(data interface{}) {

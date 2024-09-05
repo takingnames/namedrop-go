@@ -242,7 +242,6 @@ func (a *Server) Authorized(request *RecordsRequest) error {
 
 		return errors.New("Insufficient perms")
 	} else {
-
 		for _, record := range request.Records {
 			if !hasPerm(record, tokenData.Permissions) {
 				return errors.New("Insufficient perms")
