@@ -236,7 +236,6 @@ func (a *Server) Authorized(request *RecordsRequest) error {
 		// get-records request
 		for _, perm := range tokenData.Permissions {
 			if request.Domain == perm.Domain && request.Host == perm.Host {
-				fmt.Println("here2")
 				return nil
 			}
 		}
