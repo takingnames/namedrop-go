@@ -220,9 +220,9 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 	return code
 }
 
-func (a *Server) Authorized(token string, records []*Record) error {
+func (a *Server) Authorized(request *RecordsRequest) error {
 
-	tokenData, err := a.db.GetTokenData(token)
+	tokenData, err := a.db.GetTokenData(request.Token)
 	if err != nil {
 		return err
 	}
@@ -232,9 +232,22 @@ func (a *Server) Authorized(token string, records []*Record) error {
 		return errors.New("Token expired")
 	}
 
-	for _, record := range records {
-		if !hasPerm(record, tokenData.Permissions) {
-			return errors.New("Insufficient perms")
+	if request.Records == nil {
+		// get-records request
+		for _, perm := range tokenData.Permissions {
+			if request.Domain == perm.Domain && request.Host == perm.Host {
+				fmt.Println("here2")
+				return nil
+			}
+		}
+
+		return errors.New("Insufficient perms")
+	} else {
+
+		for _, record := range request.Records {
+			if !hasPerm(record, tokenData.Permissions) {
+				return errors.New("Insufficient perms")
+			}
 		}
 	}
 

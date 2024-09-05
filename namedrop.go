@@ -15,6 +15,13 @@ const ScopeHosts = "namedrop-hosts"
 const ScopeMail = "namedrop-mail"
 const ScopeAcme = "namedrop-acme"
 
+type RecordsRequest struct {
+	Domain  string    `json:"domain"`
+	Host    string    `json:"host"`
+	Token   string    `json:"token"`
+	Records []*Record `json:"records"`
+}
+
 type AuthRequest struct {
 	*oauth.AuthRequest
 	RequestedPermissions []*Permission
