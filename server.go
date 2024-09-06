@@ -220,36 +220,81 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 	return code
 }
 
-func (a *Server) Authorized(request *RecordsRequest) error {
+func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 
 	tokenData, err := a.db.GetTokenData(request.Token)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if oauth.Expired(tokenData.IssuedAt, tokenData.ExpiresIn) {
 		// TODO: delete token
-		return errors.New("Token expired")
+		return nil, errors.New("Token expired")
 	}
 
-	if request.Records == nil {
+	expandedReq := &RecordsRequest{}
+
+	expandedReq.Domain = request.Domain
+	if expandedReq.Domain == "" {
+		tokDomainMap := make(map[string]bool)
+
+		for _, perm := range tokenData.Permissions {
+			tokDomainMap[perm.Domain] = true
+		}
+
+		if len(tokDomainMap) == 1 {
+			expandedReq.Domain = tokenData.Permissions[0].Domain
+		}
+	}
+
+	expandedReq.Host = request.Host
+	if expandedReq.Host == "" {
+		tokHostMap := make(map[string]bool)
+
+		for _, perm := range tokenData.Permissions {
+			tokHostMap[perm.Host] = true
+		}
+
+		if len(tokHostMap) == 1 {
+			expandedReq.Host = tokenData.Permissions[0].Host
+		}
+	}
+
+	recsCopy := make([]*Record, len(request.Records))
+	for i, rec := range request.Records {
+		cp := *rec
+		recsCopy[i] = &cp
+	}
+
+	expandedReq.Records = recsCopy
+
+	for _, rec := range recsCopy {
+		if rec.Domain == "" {
+			rec.Domain = expandedReq.Domain
+		}
+		if rec.Host == "" {
+			rec.Host = expandedReq.Host
+		}
+	}
+
+	if expandedReq.Records == nil {
 		// get-records request
 		for _, perm := range tokenData.Permissions {
-			if request.Domain == perm.Domain && request.Host == perm.Host {
-				return nil
+			if expandedReq.Domain == perm.Domain && expandedReq.Host == perm.Host {
+				return nil, nil
 			}
 		}
 
-		return errors.New("Insufficient perms")
+		return nil, errors.New("Insufficient perms")
 	} else {
-		for _, record := range request.Records {
+		for _, record := range expandedReq.Records {
 			if !hasPerm(record, tokenData.Permissions) {
-				return errors.New("Insufficient perms")
+				return nil, errors.New("Insufficient perms")
 			}
 		}
 	}
 
-	return nil
+	return expandedReq, nil
 }
 
 func extractToken(tokenName string, r *http.Request) (string, error) {
