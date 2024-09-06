@@ -263,6 +263,7 @@ func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 	recsCopy := make([]*Record, len(request.Records))
 	for i, rec := range request.Records {
 		cp := *rec
+		cp.Host = strings.Replace(cp.Host, "{{host}}", expandedReq.Host, -1)
 		recsCopy[i] = &cp
 	}
 
