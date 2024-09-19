@@ -264,6 +264,9 @@ func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 	for i, rec := range request.Records {
 		cp := *rec
 		cp.Host = strings.Replace(cp.Host, "{{host}}", expandedReq.Host, -1)
+		if strings.HasSuffix(cp.Host, ".") {
+			cp.Host = cp.Host[:len(cp.Host)-1]
+		}
 		recsCopy[i] = &cp
 	}
 
