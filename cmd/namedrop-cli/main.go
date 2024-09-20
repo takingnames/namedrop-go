@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"os"
@@ -137,21 +138,63 @@ func main() {
                   <!doctype html>
                   <html>
                     <head>
+                      <meta charset="utf-8">
+                      <meta name="viewport" content="width=device-width, initial-scale=1" />
                       <style>
+
                         body {
                           font-family: Arial;
+                          font-size: 28px;
+                          display: flex;
+                          justify-content: center;
+                          margin: 0px;
+                          line-height: 1.5;
                         }
+
+                        .content {
+                          margin-top: 30vh;
+                          max-width: 640px;
+                          width: 100%;
+                          padding: 5px;
+                        }
+
                       </style>
                     </head>
                     <body>
-                      <p>
-                        Success. You can close this tab.
-                      </p>
+                      <div class='content'>
+                        <p>
+                          <strong>{{.Fqdn}}</strong> has been set up successfully. Feel free to close this tab,
+                          or click <a href='https://{{.Fqdn}}'>this link</a> to navigate to https://{{.Fqdn}}.
+                        </p>
+                      </div>
                     </body>
                   </html>
                 `
 
-		w.Write([]byte(html))
+		tmpl, callbackErr := template.New("html").Parse(html)
+		if callbackErr != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, callbackErr.Error())
+			return
+		}
+
+		fqdn := perm.Domain
+		if perm.Host != "" {
+			fqdn = fmt.Sprintf("%s.%s", perm.Host, perm.Domain)
+		}
+
+		data := struct {
+			Fqdn string
+		}{
+			Fqdn: fqdn,
+		}
+
+		callbackErr = tmpl.Execute(w, data)
+		if callbackErr != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, callbackErr.Error())
+			return
+		}
 
 		// TODO: race condition?
 		go func() {
