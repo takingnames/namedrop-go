@@ -15,6 +15,44 @@ import (
 	"time"
 )
 
+func SetRecords(apiUri string, recordsReq *RecordsRequest) (err error) {
+
+	uri := fmt.Sprintf("%s/set-records", apiUri)
+
+	bodyBytes, err := json.Marshal(recordsReq)
+	if err != nil {
+		return
+	}
+
+	body := bytes.NewReader(bodyBytes)
+
+	httpClient := &http.Client{}
+
+	var req *http.Request
+	req, err = http.NewRequest(http.MethodPost, uri, body)
+	if err != nil {
+		return
+	}
+
+	var res *http.Response
+	res, err = httpClient.Do(req)
+	if err != nil {
+		return
+	}
+
+	bodyBytes, err = io.ReadAll(res.Body)
+	if err != nil {
+		return
+	}
+
+	if res.StatusCode != 200 {
+		err = fmt.Errorf("SetRecords: invalid status code: %s", string(bodyBytes))
+		return
+	}
+
+	return
+}
+
 type ClientDatabase interface {
 	SetDNSRequest(string, DNSRequest)
 	GetDNSRequest(string) (DNSRequest, error)
@@ -52,7 +90,7 @@ func (c *Client) SetDomain(domain string) {
 }
 
 func (c *Client) BootstrapLink() (string, error) {
-	bootstrapDomain, err := c.GetIpDomain()
+	bootstrapDomain, err := GetIpDomain(c.providerUri)
 	if err != nil {
 		return "", err
 	}
@@ -200,8 +238,12 @@ func (c *Client) CreateRecord(record Record) error {
 }
 
 func (c *Client) GetIpDomain() (string, error) {
+	return GetIpDomain(c.providerUri)
+}
 
-	url := fmt.Sprintf("https://%s/ip-domain", c.providerUri)
+func GetIpDomain(providerUri string) (string, error) {
+
+	url := fmt.Sprintf("https://%s/ip-domain", providerUri)
 	resp, err := http.Post(url, "", nil)
 	if err != nil {
 		return "", err
@@ -226,6 +268,51 @@ func (c *Client) GetPublicIpv6() (string, error) {
 }
 
 func (c *Client) GetPublicIp(network string) (string, error) {
+	return GetPublicIp(c.providerUri, network)
+}
+
+type IpResponse struct {
+	IPv4 string
+	IPv6 string
+}
+
+func GetPublicIps(providerUri string) (IpResponse, error) {
+	wg := &sync.WaitGroup{}
+
+	var ipv4 string
+	var ipv4err error
+	var ipv6 string
+	var ipv6err error
+
+	wg.Add(2)
+
+	go func() {
+		ipv4, ipv4err = GetPublicIp(providerUri, "tcp4")
+		wg.Done()
+	}()
+
+	go func() {
+		ipv6, ipv6err = GetPublicIp(providerUri, "tcp6")
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	if ipv4err != nil {
+		return IpResponse{}, ipv4err
+	}
+
+	if ipv6err != nil {
+		return IpResponse{}, ipv6err
+	}
+
+	return IpResponse{
+		IPv4: ipv4,
+		IPv6: ipv6,
+	}, nil
+}
+
+func GetPublicIp(providerUri, network string) (string, error) {
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -239,7 +326,7 @@ func (c *Client) GetPublicIp(network string) (string, error) {
 
 	httpClient.Transport = transport
 
-	resp, err := httpClient.Get(fmt.Sprintf("https://%s/my-ip", c.providerUri))
+	resp, err := httpClient.Get(fmt.Sprintf("https://%s/my-ip", providerUri))
 	if err != nil {
 		return "", err
 	}

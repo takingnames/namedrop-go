@@ -63,7 +63,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		refreshToken, err = oauth.ParseTokenRequest(r.Form, codeData.AuthRequestState)
+		refreshToken, err = oauth.VerifyTokenRequest(r.Form, codeData.AuthRequestState)
 		if err != nil {
 			w.WriteHeader(500)
 			io.WriteString(w, err.Error())
@@ -183,8 +183,7 @@ func ParseAuthRequest(params url.Values) (*AuthRequest, error) {
 		return nil, errors.New("redirect_uri must be on the same domain as client_id")
 	}
 
-	perms := strings.Split(req.Scope, " ")
-	reqPerms, err := scopesToPerms(perms)
+	reqPerms, err := scopesToPerms(req.Scopes)
 	if err != nil {
 		return nil, err
 	}
