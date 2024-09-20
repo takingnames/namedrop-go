@@ -24,8 +24,6 @@ func main() {
 	ips, err := namedrop.GetPublicIps(apiUri)
 	checkErr(err)
 
-	fmt.Println(ips)
-
 	httpsPort := 443
 
 	err = namedrop.CheckPublicAddress(ips.IPv4, httpsPort)
