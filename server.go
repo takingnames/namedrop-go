@@ -355,7 +355,3 @@ func scopesToPerms(scopes []string) ([]*Permission, error) {
 
 	return reqPerms, nil
 }
-
-func validScope(s string) bool {
-	return s == ScopeHosts || s == ScopeMail || s == ScopeAcme
-}

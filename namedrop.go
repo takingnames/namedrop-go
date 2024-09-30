@@ -14,6 +14,11 @@ import (
 const ScopeHosts = "namedrop-hosts"
 const ScopeMail = "namedrop-mail"
 const ScopeAcme = "namedrop-acme"
+const ScopeAtprotoHandle = "namedrop-atproto-handle"
+
+func validScope(s string) bool {
+	return s == ScopeHosts || s == ScopeMail || s == ScopeAcme || s == ScopeAtprotoHandle
+}
 
 type RecordsRequest struct {
 	Domain  string    `json:"domain"`
@@ -122,6 +127,10 @@ func checkPerm(r *Record, p *Permission) bool {
 	case "TXT":
 		if strings.HasPrefix(r.Host, "_acme-challenge") {
 			return p.Scope == ScopeAcme && commonChecks(r, p)
+		}
+
+		if strings.HasPrefix(r.Host, "_atproto") {
+			return p.Scope == ScopeAtprotoHandle && commonChecks(r, p)
 		}
 
 		trimmedValue := strings.TrimSpace(r.Value)
