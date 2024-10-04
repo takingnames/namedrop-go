@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"html/template"
 	"io"
@@ -18,31 +19,64 @@ import (
 
 func main() {
 
+	portArg := flag.Int("port", 443, "Port")
+	flag.Parse()
+
+	port := *portArg
+
 	apiUri := "takingnames.io/namedrop"
+	//apiUri := "tn.tn7.org/namedrop"
 	serverUri := fmt.Sprintf("https://%s", apiUri)
 
 	ips, err := namedrop.GetPublicIps(apiUri)
 	checkErr(err)
 
-	httpsPort := 443
-
-	err = namedrop.CheckPublicAddress(ips.IPv4, httpsPort)
+	err = namedrop.CheckPublicAddress(ips.IPv4, port)
 	checkErr(err)
 
-	err = namedrop.CheckPublicAddress(ips.IPv6, httpsPort)
+	err = namedrop.CheckPublicAddress(ips.IPv6, port)
 	checkErr(err)
 
-	bootstrapDomain, err := namedrop.GetIpDomain(apiUri)
-	checkErr(err)
+	scheme := "http://"
+	portStr := fmt.Sprintf(":%d", port)
+	redirectUri := fmt.Sprintf("%s%s%s/callback", scheme, ips.IPv4, portStr)
+	//redirectUri := fmt.Sprintf("%s[%s]%s/callback", scheme, ips.IPv6, portStr)
 
-	ctx := context.Background()
-	err = certmagic.ManageAsync(ctx, []string{bootstrapDomain})
-	checkErr(err)
+	server := http.Server{
+		Addr: fmt.Sprintf(":%d", port),
+	}
+
+	useTls := false
+	if port == 443 {
+		useTls = true
+	}
+
+	if useTls {
+
+		certConfig := certmagic.NewDefault()
+
+		tlsConfig := &tls.Config{
+			GetCertificate: certConfig.GetCertificate,
+		}
+
+		server.TLSConfig = tlsConfig
+
+		bootstrapDomain, err := namedrop.GetIpDomain(apiUri)
+		checkErr(err)
+
+		ctx := context.Background()
+		err = certmagic.ManageAsync(ctx, []string{bootstrapDomain})
+		checkErr(err)
+
+		scheme = "https://"
+		portStr = ""
+		redirectUri = fmt.Sprintf("%s%s/callback", scheme, bootstrapDomain)
+	}
 
 	scopes := []string{namedrop.ScopeHosts}
 
 	ar := &oauth.AuthRequest{
-		RedirectUri: fmt.Sprintf("https://%s/callback", bootstrapDomain),
+		RedirectUri: redirectUri,
 		Scopes:      scopes,
 	}
 
@@ -56,21 +90,9 @@ func main() {
 
 	fmt.Println(flowState.AuthUri)
 
-	certConfig := certmagic.NewDefault()
-
-	tlsConfig := &tls.Config{
-		GetCertificate: certConfig.GetCertificate,
-		//NextProtos:     []string{"h2", "acme-tls/1"},
-	}
-
 	var code string
 	var state string
 	var callbackErr error
-
-	server := http.Server{
-		Addr:      fmt.Sprintf(":%d", httpsPort),
-		TLSConfig: tlsConfig,
-	}
 
 	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		code = r.URL.Query().Get("code")
@@ -132,7 +154,7 @@ func main() {
 			return
 		}
 
-		html := `
+		html := fmt.Sprintf(`
                   <!doctype html>
                   <html>
                     <head>
@@ -152,7 +174,7 @@ func main() {
                         .content {
                           margin-top: 30vh;
                           max-width: 640px;
-                          width: 100%;
+                          width: 100%%;
                           padding: 5px;
                         }
 
@@ -162,12 +184,12 @@ func main() {
                       <div class='content'>
                         <p>
                           <strong>{{.Fqdn}}</strong> has been set up successfully. Feel free to close this tab,
-                          or click <a href='https://{{.Fqdn}}'>this link</a> to navigate to https://{{.Fqdn}}.
+                          or click <a href='%s{{.Fqdn}}%s'>this link</a> to navigate to %s{{.Fqdn}}%s.
                         </p>
                       </div>
                     </body>
                   </html>
-                `
+                `, scheme, portStr, scheme, portStr)
 
 		tmpl, callbackErr := template.New("html").Parse(html)
 		if callbackErr != nil {
@@ -202,7 +224,13 @@ func main() {
 
 	checkErr(callbackErr)
 
-	server.ListenAndServeTLS("", "")
+	if useTls {
+		err = server.ListenAndServeTLS("", "")
+	} else {
+		err = server.ListenAndServe()
+	}
+
+	checkErr(err)
 }
 
 func checkErr(err error) {
