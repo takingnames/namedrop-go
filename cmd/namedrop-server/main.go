@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/lastlogin-io/obligator"
 	"github.com/takingnames/namedrop-go"
@@ -59,15 +60,25 @@ func main() {
 
 	authUri := fmt.Sprintf("https://login.%s", domain)
 
-	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
-
-		r.ParseForm()
-
-		id := r.Header.Get("Remote-Id")
+	idOrLogin := func(w http.ResponseWriter, r *http.Request) (id string, done bool) {
+		id = r.Header.Get("Remote-Id")
 		if id != adminId {
 			returnUri := fmt.Sprintf("https://%s%s", r.Host, r.RequestURI)
 			uri := fmt.Sprintf("%s/login?return_uri=%s", authUri, url.QueryEscape(returnUri))
 			http.Redirect(w, r, uri, 302)
+			done = true
+			return
+		}
+
+		return
+	}
+
+	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
+
+		r.ParseForm()
+
+		_, done := idOrLogin(w, r)
+		if done {
 			return
 		}
 
@@ -77,7 +88,43 @@ func main() {
 			return
 		}
 
-		printJson(authReq)
+		displayClientId := authReq.ClientId
+
+		parsedClientId, err := url.Parse(authReq.ClientId)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		displayClientId = parsedClientId.Host
+
+		hostParts := strings.Split(parsedClientId.Host, ":")
+
+		if hostParts[0] == "localhost" {
+			displayClientId = "An app on your device"
+		}
+
+		permDescriptions := []string{}
+
+		for _, perm := range authReq.RequestedPermissions {
+			var description string
+
+			switch perm.Scope {
+			case namedrop.ScopeHosts:
+				description = "Change the servers pointed to by "
+			case namedrop.ScopeMail:
+				description = "Change mail servers and settings for "
+			case namedrop.ScopeAcme:
+				description = "Obtain security (TLS) certificates for "
+			case namedrop.ScopeAtprotoHandle:
+				description = "Set a custom Bluesky/atproto handle for "
+			default:
+				http.Error(w, "Unknown scope "+perm.Scope, 400)
+				return
+			}
+
+			permDescriptions = append(permDescriptions, description)
+		}
 
 		zones, err := provider.ListZones(context.Background())
 		if err != nil {
@@ -85,12 +132,36 @@ func main() {
 			return
 		}
 
-		printJson(zones)
+		data := struct {
+			DisplayClientId  string
+			Zones            []libdns.Zone
+			PermDescriptions []string
+		}{
+			DisplayClientId:  displayClientId,
+			Zones:            zones,
+			PermDescriptions: permDescriptions,
+		}
+
+		err = tmpl.ExecuteTemplate(w, "authorize.html", data)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	})
+
+	mux.HandleFunc("/approved", func(w http.ResponseWriter, r *http.Request) {
+
+		r.ParseForm()
+
+		_, done := idOrLogin(w, r)
+		if done {
+			return
+		}
 
 		data := struct {
 		}{}
 
-		err = tmpl.ExecuteTemplate(w, "authorize.html", data)
+		err = tmpl.ExecuteTemplate(w, "approved.html", data)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return

@@ -1,1 +1,35 @@
-<h1>Hi there</h1>
+<h1>Authorize</h1>
+
+<p>
+  <span class='tn-requester-name'>{{.DisplayClientId}}</span> is requesting control over a
+  domain. The following abilities are being requested:
+</p>
+
+<ul>
+  {{ range .PermDescriptions}}
+  <li>{{.}} <span class='domain-placeholder'>the domain</span></li>
+  {{ end }}
+</ul>
+
+<form action="/approved" method="POST">
+
+  <p>
+    To approve, select a domain below
+  </p>
+
+  <div>
+    <input type="text" id='host-input' name="requested_host" placeholder="Host optional" />
+    <span>.</span>
+    <select id="domain-input" name="requested_domain" required>
+      <option></option>
+      {{ range .Zones }}
+      <option>{{ .Name }}</option>
+      {{ end }}
+    </select>
+  </div>
+
+  <div class='tn-button-row'>
+    <button class='button'>Approve</button>
+    <button class='button' formaction="/deny">Deny</button>
+  </div>
+</form>
