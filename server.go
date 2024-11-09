@@ -14,14 +14,14 @@ import (
 )
 
 type Server struct {
-	db  Database
-	mux *http.ServeMux
+	store KvStore
+	mux   *http.ServeMux
 }
 
-func NewServer(db Database) *Server {
+func NewServer(store KvStore) *Server {
 
 	a := &Server{
-		db: db,
+		store: store,
 	}
 
 	mux := &http.ServeMux{}
@@ -56,10 +56,16 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 
 		code := r.Form.Get("code")
 
-		codeData, err := a.db.GetPendingToken(code)
+		codeData := new(PendingToken)
+		found, err := a.store.Get("pending_tokens/"+code, codeData)
 		if err != nil {
 			w.WriteHeader(500)
 			io.WriteString(w, err.Error())
+			return
+		}
+
+		if !found {
+			http.Error(w, "No such pending token", 400)
 			return
 		}
 
@@ -70,7 +76,7 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = a.db.DeletePendingToken(code)
+		err = a.store.Delete("pending_tokens/" + code)
 		if err != nil {
 			w.WriteHeader(500)
 			io.WriteString(w, err.Error())
@@ -85,10 +91,16 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tokenData, err := a.db.GetTokenData(refreshToken)
+	tokenData := new(TokenData)
+	found, err := a.store.Get("token_data/"+refreshToken, tokenData)
 	if err != nil {
 		w.WriteHeader(500)
 		io.WriteString(w, err.Error())
+		return
+	}
+
+	if !found {
+		http.Error(w, "Token data not found", 400)
 		return
 	}
 
@@ -106,7 +118,12 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, _ := genRandomKey()
 	tokenData.Token = accessToken
-	a.db.SetTokenData(tokenData)
+
+	err = a.store.Set("token_data/"+accessToken, tokenData)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	resp := TokenResponse{
 		oauth.TokenResponse{
@@ -140,10 +157,16 @@ func (a *Server) handleTokenData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenData, err := a.db.GetTokenData(token)
+	tokenData := new(TokenData)
+	found, err := a.store.Get("token_data/"+token, tokenData)
 	if err != nil {
 		w.WriteHeader(400)
 		io.WriteString(w, err.Error())
+		return
+	}
+
+	if !found {
+		http.Error(w, "No such token", 400)
 		return
 	}
 
@@ -196,17 +219,26 @@ func ParseAuthRequest(params url.Values) (*AuthRequest, error) {
 	return ar, nil
 }
 
-func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
+func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) (string, error) {
 
-	token, _ := genRandomKey()
+	token, err := genRandomKey()
+	if err != nil {
+		return "", err
+	}
 
 	tokenData.Token = token
 	tokenData.IssuedAt = time.Now().UTC()
 	tokenData.ExpiresIn = 0
 
-	a.db.SetTokenData(tokenData)
+	err = a.store.Set("token_data/"+token, tokenData)
+	if err != nil {
+		return "", err
+	}
 
-	code, _ := genRandomKey()
+	code, err := genRandomKey()
+	if err != nil {
+		return "", err
+	}
 
 	authReqState := oauth.EncodeAuthRequestState(token, authReqParams)
 
@@ -214,16 +246,24 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) string {
 		AuthRequestState: authReqState,
 	}
 
-	a.db.SetPendingToken(code, pendingToken)
+	err = a.store.Set("pending_tokens/"+code, pendingToken)
+	if err != nil {
+		return "", err
+	}
 
-	return code
+	return code, nil
 }
 
 func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 
-	tokenData, err := a.db.GetTokenData(request.Token)
+	tokenData := new(TokenData)
+	found, err := a.store.Get("token_data/"+request.Token, tokenData)
 	if err != nil {
 		return nil, err
+	}
+
+	if !found {
+		return nil, errors.New("No such token")
 	}
 
 	if oauth.Expired(tokenData.IssuedAt, tokenData.ExpiresIn) {

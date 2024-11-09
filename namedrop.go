@@ -9,6 +9,7 @@ import (
 	"time"
 
 	oauth "github.com/anderspitman/little-oauth2-go"
+	"github.com/philippgille/gokv"
 )
 
 const ScopeHosts = "namedrop-hosts"
@@ -20,6 +21,8 @@ func validScope(s string) bool {
 	return s == ScopeHosts || s == ScopeMail || s == ScopeAcme || s == ScopeAtprotoHandle
 }
 
+type KvStore gokv.Store
+
 type RecordsRequest struct {
 	Domain  string    `json:"domain"`
 	Host    string    `json:"host"`
@@ -30,14 +33,6 @@ type RecordsRequest struct {
 type AuthRequest struct {
 	*oauth.AuthRequest
 	RequestedPermissions []*Permission
-}
-
-type Database interface {
-	SetTokenData(tokenData *TokenData)
-	GetTokenData(token string) (*TokenData, error)
-	SetPendingToken(code string, tok PendingToken)
-	GetPendingToken(code string) (PendingToken, error)
-	DeletePendingToken(code string) error
 }
 
 type TokenData struct {
@@ -77,6 +72,9 @@ type TokenResponse struct {
 	Permissions []*Permission `json:"permissions"`
 }
 
+func GenRandomKey() (string, error) {
+	return genRandomKey()
+}
 func genRandomKey() (string, error) {
 
 	const chars string = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

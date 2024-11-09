@@ -1,6 +1,8 @@
 package main
 
 import (
+	//"time"
+	//"sync"
 	"context"
 	"embed"
 	"encoding/json"
@@ -18,6 +20,8 @@ import (
 	//namedropdns "github.com/takingnames/namedrop-libdns"
 	"github.com/libdns/libdns"
 	"github.com/libdns/namedotcom"
+	//"github.com/philippgille/gokv/syncmap"
+	filestore "github.com/philippgille/gokv/file"
 )
 
 //go:embed templates
@@ -56,6 +60,15 @@ func main() {
 	tmpl, err := template.ParseFS(fs, "templates/*")
 	exitOnError(err)
 
+	store, err := filestore.NewStore(filestore.Options{
+		Directory: "./db",
+	})
+	exitOnError(err)
+
+	defer store.Close()
+
+	ndServer := namedrop.NewServer(store)
+
 	mux := http.NewServeMux()
 
 	authUri := fmt.Sprintf("https://login.%s", domain)
@@ -72,6 +85,11 @@ func main() {
 
 		return
 	}
+
+	//pendingTokens := make(map[string]*namedrop.TokenData)
+	//mut := &sync.Mutex{}
+
+	mux.Handle("/token", ndServer)
 
 	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
 
@@ -136,10 +154,12 @@ func main() {
 			DisplayClientId  string
 			Zones            []libdns.Zone
 			PermDescriptions []string
+			RawQuery         string
 		}{
 			DisplayClientId:  displayClientId,
 			Zones:            zones,
 			PermDescriptions: permDescriptions,
+			RawQuery:         r.URL.RawQuery,
 		}
 
 		err = tmpl.ExecuteTemplate(w, "authorize.html", data)
@@ -153,19 +173,54 @@ func main() {
 
 		r.ParseForm()
 
-		_, done := idOrLogin(w, r)
+		id, done := idOrLogin(w, r)
 		if done {
 			return
 		}
 
-		data := struct {
-		}{}
+		authReqParamsStr := r.Form.Get("raw_query")
+		params, err := url.ParseQuery(authReqParamsStr)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
 
-		err = tmpl.ExecuteTemplate(w, "approved.html", data)
+		authReq, err := namedrop.ParseAuthRequest(params)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		perms := []*namedrop.Permission{}
+		scopes := []string{}
+
+		for _, reqPerm := range authReq.RequestedPermissions {
+			perm := &namedrop.Permission{
+				Domain: r.Form.Get("requested_domain"),
+				Host:   r.Form.Get("requested_host"),
+				Scope:  reqPerm.Scope,
+			}
+
+			perms = append(perms, perm)
+			scopes = append(scopes, reqPerm.Scope)
+		}
+
+		scopeParam := strings.Join(scopes, " ")
+
+		createTokenData := &namedrop.TokenData{
+			OwnerId:     id,
+			Permissions: perms,
+		}
+
+		code, err := ndServer.CreateCode(createTokenData, authReqParamsStr)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+
+		redirUrl := fmt.Sprintf("%s?state=%s&code=%s&scope=%s", authReq.RedirectUri, authReq.State, code, scopeParam)
+
+		http.Redirect(w, r, redirUrl, 303)
 	})
 
 	dbPrefix := "auth_"
@@ -186,7 +241,7 @@ func main() {
 			&obligator.OAuth2Provider{
 				ID:            "lastlogin",
 				Name:          "LastLogin",
-				URI:           "https://lastlogin.io",
+				URI:           "https://lastlogin.net",
 				ClientID:      authUri,
 				OpenIDConnect: true,
 			},

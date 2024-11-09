@@ -8,6 +8,8 @@ replace github.com/anderspitman/little-oauth2-go => ../little-oauth2-go
 
 replace github.com/libdns/namedotcom => ../namedotcom
 
+replace github.com/lastlogin-io/obligator => ../obligator
+
 require (
 	github.com/anderspitman/little-oauth2-go v0.0.0-20240904162115-5d18e06f4a81
 	github.com/caddyserver/certmagic v0.15.2
@@ -15,7 +17,8 @@ require (
 	github.com/libdns/libdns v0.2.2
 	github.com/libdns/namedotcom v0.3.3
 	github.com/mdp/qrterminal/v3 v3.2.0
-	github.com/takingnames/namedrop-libdns v0.0.0-20240917203258-1f9519ecccd9
+	github.com/philippgille/gokv v0.7.0
+	github.com/philippgille/gokv/file v0.7.0
 	golang.org/x/oauth2 v0.23.0
 )
 
@@ -34,6 +37,8 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.18 // indirect
 	github.com/mholt/acmez v1.0.1 // indirect
 	github.com/miekg/dns v1.1.43 // indirect
+	github.com/philippgille/gokv/encoding v0.7.0 // indirect
+	github.com/philippgille/gokv/util v0.7.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
