@@ -20,8 +20,7 @@ import (
 	//namedropdns "github.com/takingnames/namedrop-libdns"
 	"github.com/libdns/libdns"
 	"github.com/libdns/namedotcom"
-	//"github.com/philippgille/gokv/syncmap"
-	filestore "github.com/philippgille/gokv/file"
+	store "github.com/takingnames/gokv/sqlite"
 )
 
 //go:embed templates
@@ -60,8 +59,9 @@ func main() {
 	tmpl, err := template.ParseFS(fs, "templates/*")
 	exitOnError(err)
 
-	store, err := filestore.NewStore(filestore.Options{
-		Directory: "./db",
+	store, err := store.NewClient(store.Options{
+		Path:      "./namedrop.sqlite",
+		TableName: "kv",
 	})
 	exitOnError(err)
 
