@@ -28,10 +28,6 @@ import (
 //go:embed templates
 var fs embed.FS
 
-type DnsProvider interface {
-	libdns.ZoneLister
-}
-
 func main() {
 	domainArg := flag.String("domain", "", "Domain")
 	adminIdArg := flag.String("admin", "", "Admin email address")
@@ -84,7 +80,7 @@ func main() {
 
 	defer store.Close()
 
-	ndServer := namedrop.NewServer(store)
+	ndServer := namedrop.NewServer(store, provider)
 
 	mux := http.NewServeMux()
 
@@ -106,7 +102,7 @@ func main() {
 	//pendingTokens := make(map[string]*namedrop.TokenData)
 	//mut := &sync.Mutex{}
 
-	mux.Handle("/token", ndServer)
+	mux.Handle("/", ndServer)
 
 	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
 
@@ -284,7 +280,7 @@ func main() {
 //        return provider, nil
 //}
 
-func getDnsProvider(provider, user, token string) (DnsProvider, error) {
+func getDnsProvider(provider, user, token string) (namedrop.DnsProvider, error) {
 	switch provider {
 	//case "takingnames":
 	//	return &namedropdns.Provider{

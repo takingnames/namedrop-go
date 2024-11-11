@@ -9,6 +9,7 @@ import (
 	"time"
 
 	oauth "github.com/anderspitman/little-oauth2-go"
+	"github.com/libdns/libdns"
 	"github.com/philippgille/gokv"
 )
 
@@ -22,6 +23,11 @@ func validScope(s string) bool {
 }
 
 type KvStore gokv.Store
+
+type DnsProvider interface {
+	libdns.ZoneLister
+	libdns.RecordSetter
+}
 
 type RecordsRequest struct {
 	Domain  string    `json:"domain"`
@@ -65,6 +71,7 @@ type Record struct {
 	Value    string `json:"value"`
 	TTL      uint32 `json:"ttl"`
 	Priority int    `json:"priority"`
+	Weight   int    `json:"weight"`
 }
 
 type TokenResponse struct {

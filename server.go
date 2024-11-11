@@ -1,6 +1,7 @@
 package namedrop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,17 +12,20 @@ import (
 	"time"
 
 	oauth "github.com/anderspitman/little-oauth2-go"
+	"github.com/libdns/libdns"
 )
 
 type Server struct {
-	store KvStore
-	mux   *http.ServeMux
+	store       KvStore
+	dnsProvider DnsProvider
+	mux         *http.ServeMux
 }
 
-func NewServer(store KvStore) *Server {
+func NewServer(store KvStore, dnsProvider DnsProvider) *Server {
 
 	a := &Server{
-		store: store,
+		store:       store,
+		dnsProvider: dnsProvider,
 	}
 
 	mux := &http.ServeMux{}
@@ -32,6 +36,7 @@ func NewServer(store KvStore) *Server {
 		ip := ReadRemoteIp(r)
 		io.WriteString(w, ip)
 	})
+	mux.HandleFunc("/set-records", a.handleRecords)
 
 	a.mux = mux
 
@@ -40,6 +45,55 @@ func NewServer(store KvStore) *Server {
 
 func (a *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mux.ServeHTTP(w, r)
+}
+
+func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		w.Header().Set("Access-Control-Max-Age", "99999")
+		return
+	}
+
+	var req *RecordsRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	expandedReq, err := a.Authorized(req)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	switch r.URL.Path {
+	case "/set-records":
+		records := []libdns.Record{}
+		for _, rec := range expandedReq.Records {
+			record := libdns.Record{
+				Type:     rec.Type,
+				Name:     rec.Host,
+				Value:    rec.Value,
+				TTL:      time.Second * time.Duration(rec.TTL),
+				Priority: uint(rec.Priority),
+				Weight:   uint(rec.Weight),
+			}
+			records = append(records, record)
+		}
+
+		// TODO: handle requests with records for multiple zones
+		zone := expandedReq.Records[0].Domain
+		_, err = a.dnsProvider.SetRecords(context.Background(), zone, records)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
 }
 
 func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
