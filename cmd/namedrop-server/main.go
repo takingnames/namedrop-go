@@ -4,6 +4,7 @@ import (
 	//"time"
 	//"sync"
 	"context"
+	"database/sql"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	//namedropdns "github.com/takingnames/namedrop-libdns"
 	"github.com/libdns/libdns"
 	"github.com/libdns/namedotcom"
+	_ "github.com/mattn/go-sqlite3"
 	store "github.com/takingnames/gokv/sqlite"
 )
 
@@ -53,6 +55,21 @@ func main() {
 		exitOnError(errors.New("Unsupported DNS provider"))
 	}
 
+	db, err := sql.Open("sqlite3", "namedrop.sqlite")
+	exitOnError(err)
+
+	stmt := `
+	PRAGMA foreign_keys = ON;
+	PRAGMA synchronous = NORMAL;
+	PRAGMA journal_mode = 'WAL';
+	PRAGMA cache_size = -64000;
+	`
+
+	_, err = db.Exec(stmt)
+	exitOnError(err)
+
+	db.SetMaxOpenConns(1)
+
 	provider, err := getDnsProvider(providerId, *dnsUserId, *dnsToken)
 	exitOnError(err)
 
@@ -60,8 +77,8 @@ func main() {
 	exitOnError(err)
 
 	store, err := store.NewClient(store.Options{
-		Path:      "./namedrop.sqlite",
 		TableName: "kv",
+		Db:        db,
 	})
 	exitOnError(err)
 
@@ -224,9 +241,12 @@ func main() {
 	})
 
 	dbPrefix := "auth_"
+	authDb, err := obligator.NewSqliteDatabaseWithDb(db, dbPrefix)
+	exitOnError(err)
 
 	ogConfig := obligator.ServerConfig{
 		DbPrefix:               dbPrefix,
+		Database:               authDb,
 		DisplayName:            "NameDrop Server",
 		Port:                   4004,
 		Prefix:                 "namedrop_",
