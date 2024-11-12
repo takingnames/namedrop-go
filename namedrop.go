@@ -22,6 +22,30 @@ func validScope(s string) bool {
 	return s == ScopeHosts || s == ScopeMail || s == ScopeAcme || s == ScopeAtprotoHandle
 }
 
+type Error struct {
+	Message    string
+	StatusCode int
+}
+
+func (e *Error) Error() string {
+	return e.Message
+}
+
+type SuccessResponse struct {
+	Type    string    `json:"type"`
+	Records []*Record `json:"records"`
+}
+
+type ErrorResponse struct {
+	Type   string                 `json:"type"`
+	Errors []*RecordErrorResponse `json:"errors"`
+}
+
+type RecordErrorResponse struct {
+	Message string  `json:"message"`
+	Record  *Record `json:"record"`
+}
+
 type KvStore gokv.Store
 
 type DnsProvider interface {
@@ -135,7 +159,8 @@ func checkPerm(r *Record, p *Permission) bool {
 		}
 
 		if strings.HasPrefix(r.Host, "_atproto") {
-			return p.Scope == ScopeAtprotoHandle && commonChecks(r, p)
+			return p.Scope == ScopeAtprotoHandle &&
+				strings.HasPrefix(r.Value, "did=") && commonChecks(r, p)
 		}
 
 		trimmedValue := strings.TrimSpace(r.Value)

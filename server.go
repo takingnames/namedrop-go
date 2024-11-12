@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	oauth "github.com/anderspitman/little-oauth2-go"
@@ -67,32 +68,79 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 
 	expandedReq, err := a.Authorized(req)
 	if err != nil {
-		http.Error(w, err.Error(), 400)
+		if e, ok := err.(*Error); ok {
+			http.Error(w, err.Error(), e.StatusCode)
+		} else {
+			http.Error(w, err.Error(), 400)
+		}
 		return
 	}
 
+	errors := []*RecordErrorResponse{}
+	mu := &sync.Mutex{}
+	wg := sync.WaitGroup{}
+
 	switch r.URL.Path {
 	case "/set-records":
+
 		records := []libdns.Record{}
 		for _, rec := range expandedReq.Records {
-			record := libdns.Record{
-				Type:     rec.Type,
-				Name:     rec.Host,
-				Value:    rec.Value,
-				TTL:      time.Second * time.Duration(rec.TTL),
-				Priority: uint(rec.Priority),
-				Weight:   uint(rec.Weight),
-			}
-			records = append(records, record)
-		}
+			wg.Add(1)
+			go func(rec *Record) {
 
-		// TODO: handle requests with records for multiple zones
-		zone := expandedReq.Records[0].Domain
-		_, err = a.dnsProvider.SetRecords(context.Background(), zone, records)
+				defer wg.Done()
+
+				record := libdns.Record{
+					Type:     rec.Type,
+					Name:     rec.Host,
+					Value:    rec.Value,
+					TTL:      time.Second * time.Duration(rec.TTL),
+					Priority: uint(rec.Priority),
+					Weight:   uint(rec.Weight),
+				}
+				records = append(records, record)
+
+				// TODO: handle requests with records for multiple zones
+				zone := expandedReq.Records[0].Domain
+				_, err = a.dnsProvider.SetRecords(context.Background(), zone, records)
+				if err != nil {
+					ndErr := &RecordErrorResponse{
+						Message: err.Error(),
+						Record:  rec,
+					}
+
+					mu.Lock()
+					errors = append(errors, ndErr)
+					mu.Unlock()
+				}
+			}(rec)
+		}
+	}
+
+	wg.Wait()
+
+	if len(errors) > 0 {
+		w.WriteHeader(400)
+		err = json.NewEncoder(w).Encode(&ErrorResponse{
+			Type:   "error",
+			Errors: errors,
+		})
+
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(&SuccessResponse{
+		Type:    "success",
+		Records: expandedReq.Records,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
 }
 
@@ -322,7 +370,10 @@ func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 
 	if oauth.Expired(tokenData.IssuedAt, tokenData.ExpiresIn) {
 		// TODO: delete token
-		return nil, errors.New("Token expired")
+		return nil, &Error{
+			Message:    "Token expired",
+			StatusCode: 403,
+		}
 	}
 
 	expandedReq := &RecordsRequest{}
@@ -382,11 +433,17 @@ func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 			}
 		}
 
-		return nil, errors.New("Insufficient perms")
+		return nil, &Error{
+			Message:    "Insufficient permissions",
+			StatusCode: 403,
+		}
 	} else {
 		for _, record := range expandedReq.Records {
 			if !hasPerm(record, tokenData.Permissions) {
-				return nil, errors.New("Insufficient perms")
+				return nil, &Error{
+					Message:    "Insufficient permissions",
+					StatusCode: 403,
+				}
 			}
 		}
 	}
