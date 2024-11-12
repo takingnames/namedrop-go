@@ -42,15 +42,18 @@ type ErrorResponse struct {
 }
 
 type RecordErrorResponse struct {
-	Message string  `json:"message"`
-	Record  *Record `json:"record"`
+	Message            string    `json:"message"`
+	RequestedRecord    *Record   `json:"requested_record"`
+	ConflictingRecords []*Record `json:"conflicting_records,omitempty"`
 }
 
 type KvStore gokv.Store
 
 type DnsProvider interface {
 	libdns.ZoneLister
+	libdns.RecordGetter
 	libdns.RecordSetter
+	libdns.RecordDeleter
 }
 
 type RecordsRequest struct {
@@ -89,13 +92,14 @@ type Permission struct {
 }
 
 type Record struct {
+	Id       string `json:"id,omitempty"`
 	Domain   string `json:"domain"`
 	Host     string `json:"host"`
 	Type     string `json:"type"`
 	Value    string `json:"value"`
 	TTL      uint32 `json:"ttl"`
-	Priority int    `json:"priority"`
-	Weight   int    `json:"weight"`
+	Priority int    `json:"priority,omitempty"`
+	Weight   int    `json:"weight,omitempty"`
 }
 
 type TokenResponse struct {

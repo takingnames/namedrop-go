@@ -37,6 +37,7 @@ func NewServer(store KvStore, dnsProvider DnsProvider) *Server {
 		ip := ReadRemoteIp(r)
 		io.WriteString(w, ip)
 	})
+	mux.HandleFunc("/get-records", a.handleRecords)
 	mux.HandleFunc("/set-records", a.handleRecords)
 
 	a.mux = mux
@@ -50,6 +51,8 @@ func (a *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 
+	r.ParseForm()
+
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	if r.Method == "OPTIONS" {
@@ -57,6 +60,8 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Max-Age", "99999")
 		return
 	}
+
+	deleteConflicting := r.Form.Get("delete_conflicting") == "true"
 
 	var req *RecordsRequest
 
@@ -80,31 +85,71 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 	mu := &sync.Mutex{}
 	wg := sync.WaitGroup{}
 
+	resultRecords := []*Record{}
+
+	existingRecs, err := a.dnsProvider.GetRecords(context.Background(), expandedReq.Domain)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
 	switch r.URL.Path {
+	case "/get-records":
+		for _, r := range existingRecs {
+			resultRecords = append(resultRecords, libdnsToNamedrop(r, "fake-domain"))
+		}
 	case "/set-records":
 
-		records := []libdns.Record{}
 		for _, rec := range expandedReq.Records {
+
 			wg.Add(1)
 			go func(rec *Record) {
-
 				defer wg.Done()
 
-				record := libdns.Record{
-					Type:     rec.Type,
-					Name:     rec.Host,
-					Value:    rec.Value,
-					TTL:      time.Second * time.Duration(rec.TTL),
-					Priority: uint(rec.Priority),
-					Weight:   uint(rec.Weight),
+				conflicts := findConflicting(rec, existingRecs)
+
+				if len(conflicts) > 0 {
+					if deleteConflicting {
+						_, err = a.dnsProvider.DeleteRecords(context.Background(), rec.Domain, conflicts)
+						if err != nil {
+							ndErr := &RecordErrorResponse{
+								Message:         err.Error(),
+								RequestedRecord: rec,
+							}
+
+							mu.Lock()
+							errors = append(errors, ndErr)
+							mu.Unlock()
+
+							return
+						}
+					} else {
+						resConflicts := []*Record{}
+						for _, c := range conflicts {
+							resConflicts = append(resConflicts, libdnsToNamedrop(c, rec.Domain))
+						}
+						ndErr := &RecordErrorResponse{
+							Message:            "Conflicts detected",
+							RequestedRecord:    rec,
+							ConflictingRecords: resConflicts,
+						}
+
+						mu.Lock()
+						errors = append(errors, ndErr)
+						mu.Unlock()
+
+						return
+					}
 				}
-				records = append(records, record)
+
+				record := namedropToLibdns(rec)
+				records := []libdns.Record{record}
 
 				_, err = a.dnsProvider.SetRecords(context.Background(), rec.Domain, records)
 				if err != nil {
 					ndErr := &RecordErrorResponse{
-						Message: err.Error(),
-						Record:  rec,
+						Message:         err.Error(),
+						RequestedRecord: rec,
 					}
 
 					mu.Lock()
@@ -134,7 +179,7 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 
 	err = json.NewEncoder(w).Encode(&SuccessResponse{
 		Type:    "success",
-		Records: expandedReq.Records,
+		Records: resultRecords,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -506,4 +551,64 @@ func scopesToPerms(scopes []string) ([]*Permission, error) {
 	}
 
 	return reqPerms, nil
+}
+
+func namedropToLibdns(rec *Record) libdns.Record {
+	return libdns.Record{
+		Type:     rec.Type,
+		Name:     rec.Host,
+		Value:    rec.Value,
+		TTL:      time.Second * time.Duration(rec.TTL),
+		Priority: uint(rec.Priority),
+		Weight:   uint(rec.Weight),
+	}
+}
+
+func libdnsToNamedrop(r libdns.Record, zone string) *Record {
+	return &Record{
+		Id:       r.ID,
+		Domain:   zone,
+		Type:     r.Type,
+		Host:     r.Name,
+		Value:    r.Value,
+		TTL:      uint32(r.TTL.Seconds()),
+		Priority: int(r.Priority),
+		Weight:   int(r.Weight),
+	}
+}
+
+func findConflicting(rec *Record, existingRecs []libdns.Record) []libdns.Record {
+	conflicts := []libdns.Record{}
+
+	switch rec.Type {
+	case "CNAME":
+		fallthrough
+	case "ANAME":
+		for _, er := range existingRecs {
+			if er.Type == "CNAME" || er.Type == "ANAME" ||
+				er.Type == "A" || er.Type == "AAAA" {
+				conflicts = append(conflicts, er)
+			}
+		}
+	case "A":
+		fallthrough
+	case "AAAA":
+		for _, er := range existingRecs {
+			if er.Type == "CNAME" || er.Type == "ANAME" {
+				conflicts = append(conflicts, er)
+			}
+		}
+	default:
+		for _, er := range existingRecs {
+			if recordsEqual(rec, er) {
+				conflicts = append(conflicts, er)
+			}
+		}
+	}
+
+	return conflicts
+}
+
+func recordsEqual(r *Record, er libdns.Record) bool {
+	return r.Type == er.Type && r.Host == er.Name && r.Value == er.Value
 }
