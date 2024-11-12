@@ -100,9 +100,7 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 				}
 				records = append(records, record)
 
-				// TODO: handle requests with records for multiple zones
-				zone := expandedReq.Records[0].Domain
-				_, err = a.dnsProvider.SetRecords(context.Background(), zone, records)
+				_, err = a.dnsProvider.SetRecords(context.Background(), rec.Domain, records)
 				if err != nil {
 					ndErr := &RecordErrorResponse{
 						Message: err.Error(),
@@ -365,7 +363,10 @@ func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 	}
 
 	if !found {
-		return nil, errors.New("No such token")
+		return nil, &Error{
+			Message:    "Invalid token",
+			StatusCode: 401,
+		}
 	}
 
 	if oauth.Expired(tokenData.IssuedAt, tokenData.ExpiresIn) {
