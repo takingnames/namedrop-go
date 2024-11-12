@@ -57,10 +57,11 @@ type DnsProvider interface {
 }
 
 type RecordsRequest struct {
-	Domain  string    `json:"domain"`
-	Host    string    `json:"host"`
-	Token   string    `json:"token"`
-	Records []*Record `json:"records"`
+	Domain            string    `json:"domain"`
+	Host              string    `json:"host"`
+	Token             string    `json:"token"`
+	Records           []*Record `json:"records"`
+	DeleteConflicting bool      `json:"delete_conflicting"`
 }
 
 type AuthRequest struct {

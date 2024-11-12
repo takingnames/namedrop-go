@@ -39,6 +39,7 @@ func NewServer(store KvStore, dnsProvider DnsProvider) *Server {
 	})
 	mux.HandleFunc("/get-records", a.handleRecords)
 	mux.HandleFunc("/set-records", a.handleRecords)
+	mux.HandleFunc("/delete-records", a.handleRecords)
 
 	a.mux = mux
 
@@ -60,8 +61,6 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Max-Age", "99999")
 		return
 	}
-
-	deleteConflicting := r.Form.Get("delete_conflicting") == "true"
 
 	var req *RecordsRequest
 
@@ -96,7 +95,7 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/get-records":
 		for _, r := range existingRecs {
-			resultRecords = append(resultRecords, libdnsToNamedrop(r, "fake-domain"))
+			resultRecords = append(resultRecords, libdnsToNamedrop(r, req.Domain))
 		}
 	case "/set-records":
 
@@ -109,7 +108,7 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 				conflicts := findConflicting(rec, existingRecs)
 
 				if len(conflicts) > 0 {
-					if deleteConflicting {
+					if req.DeleteConflicting {
 						_, err = a.dnsProvider.DeleteRecords(context.Background(), rec.Domain, conflicts)
 						if err != nil {
 							ndErr := &RecordErrorResponse{
@@ -155,6 +154,43 @@ func (a *Server) handleRecords(w http.ResponseWriter, r *http.Request) {
 					mu.Lock()
 					errors = append(errors, ndErr)
 					mu.Unlock()
+				}
+			}(rec)
+		}
+
+	case "/delete-records":
+		for _, rec := range expandedReq.Records {
+
+			wg.Add(1)
+			go func(rec *Record) {
+				defer wg.Done()
+
+				matchingRecord, match := findMatching(rec, existingRecs)
+				if !match {
+					ndErr := &RecordErrorResponse{
+						Message:         "No matching record found",
+						RequestedRecord: rec,
+					}
+
+					mu.Lock()
+					errors = append(errors, ndErr)
+					mu.Unlock()
+					return
+				}
+
+				records := []libdns.Record{matchingRecord}
+
+				_, err = a.dnsProvider.DeleteRecords(context.Background(), rec.Domain, records)
+				if err != nil {
+					ndErr := &RecordErrorResponse{
+						Message:         err.Error(),
+						RequestedRecord: rec,
+					}
+
+					mu.Lock()
+					errors = append(errors, ndErr)
+					mu.Unlock()
+					return
 				}
 			}(rec)
 		}
@@ -585,8 +621,9 @@ func findConflicting(rec *Record, existingRecs []libdns.Record) []libdns.Record 
 		fallthrough
 	case "ANAME":
 		for _, er := range existingRecs {
-			if er.Type == "CNAME" || er.Type == "ANAME" ||
-				er.Type == "A" || er.Type == "AAAA" {
+			if rec.Host == er.Name &&
+				(er.Type == "CNAME" || er.Type == "ANAME" ||
+					er.Type == "A" || er.Type == "AAAA") {
 				conflicts = append(conflicts, er)
 			}
 		}
@@ -594,7 +631,7 @@ func findConflicting(rec *Record, existingRecs []libdns.Record) []libdns.Record 
 		fallthrough
 	case "AAAA":
 		for _, er := range existingRecs {
-			if er.Type == "CNAME" || er.Type == "ANAME" {
+			if rec.Host == er.Name && (er.Type == "CNAME" || er.Type == "ANAME") {
 				conflicts = append(conflicts, er)
 			}
 		}
@@ -607,6 +644,16 @@ func findConflicting(rec *Record, existingRecs []libdns.Record) []libdns.Record 
 	}
 
 	return conflicts
+}
+
+func findMatching(rec *Record, existingRecs []libdns.Record) (libdns.Record, bool) {
+	for _, er := range existingRecs {
+		if recordsEqual(rec, er) {
+			return er, true
+		}
+	}
+
+	return libdns.Record{}, false
 }
 
 func recordsEqual(r *Record, er libdns.Record) bool {
