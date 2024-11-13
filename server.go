@@ -41,6 +41,9 @@ func NewServer(store KvStore, dnsProvider DnsProvider) *Server {
 	mux.HandleFunc("/set-records", a.handleRecords)
 	mux.HandleFunc("/delete-records", a.handleRecords)
 
+	mux.HandleFunc("/temp-subdomain", a.handleTempDomain)
+	mux.HandleFunc("/ip-domain", a.handleTempDomain)
+
 	a.mux = mux
 
 	return a
@@ -328,6 +331,63 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonStr)
 }
 
+func (a *Server) handleTempDomain(w http.ResponseWriter, r *http.Request) {
+	ip := ReadRemoteIp(r)
+
+	replaceChar := ":"
+	recordType := "AAAA"
+	if IsIPv4(ip) {
+		replaceChar = "."
+		recordType = "A"
+	}
+
+	host := strings.Replace(ip, replaceChar, "-", -1)
+
+	var zone string
+	found, err := a.store.Get("temp_subdomain_zone", &zone)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	if !found {
+		http.Error(w, "temp_subdomain_zone not found in store", 500)
+		return
+	}
+
+	ctx := context.Background()
+
+	existingRecs, err := a.dnsProvider.GetRecords(ctx, zone)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	alreadyExists := false
+	for _, rec := range existingRecs {
+		if rec.Name == host {
+			alreadyExists = true
+			break
+		}
+	}
+
+	if !alreadyExists {
+		rec := libdns.Record{
+			Type:  recordType,
+			Name:  host,
+			Value: ip,
+		}
+		recs := []libdns.Record{rec}
+
+		_, err := a.dnsProvider.SetRecords(ctx, zone, recs)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
+
+	io.WriteString(w, host+"."+zone)
+}
+
 func (a *Server) handleTokenData(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
@@ -553,6 +613,7 @@ func extractToken(tokenName string, r *http.Request) (string, error) {
 
 func ReadRemoteIp(r *http.Request) string {
 
+	// TODO: XFF security
 	xffHeader := r.Header.Get("X-Forwarded-For")
 
 	var ip string
@@ -658,4 +719,9 @@ func findMatching(rec *Record, existingRecs []libdns.Record) (libdns.Record, boo
 
 func recordsEqual(r *Record, er libdns.Record) bool {
 	return r.Type == er.Type && r.Host == er.Name && r.Value == er.Value
+}
+
+// Taken from https://stackoverflow.com/a/48519490/943814
+func IsIPv4(address string) bool {
+	return strings.Count(address, ":") < 2
 }

@@ -30,6 +30,7 @@ var fs embed.FS
 
 func main() {
 	domainArg := flag.String("domain", "", "Domain")
+	tempDomainRootArg := flag.String("temp-domain-root", "", "Temporary domain root")
 	adminIdArg := flag.String("admin", "", "Admin email address")
 	providerIdArg := flag.String("dns-provider", "", "DNS provider ID")
 	dnsUserId := flag.String("dns-user", "", "DNS user ID")
@@ -49,6 +50,11 @@ func main() {
 	providerId := *providerIdArg
 	if providerId != "name.com" {
 		exitOnError(errors.New("Unsupported DNS provider"))
+	}
+
+	tempDomainRoot := *tempDomainRootArg
+	if tempDomainRoot == "" {
+		tempDomainRoot = "ip." + domain
 	}
 
 	db, err := sql.Open("sqlite3", "namedrop.sqlite")
@@ -76,6 +82,9 @@ func main() {
 		TableName: "kv",
 		Db:        db,
 	})
+	exitOnError(err)
+
+	err = store.Set("temp_subdomain_zone", tempDomainRoot)
 	exitOnError(err)
 
 	defer store.Close()
