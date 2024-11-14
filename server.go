@@ -31,6 +31,9 @@ func NewServer(store KvStore, dnsProvider DnsProvider) *Server {
 
 	mux := &http.ServeMux{}
 
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "<h1>NameDrop Server</h1>")
+	})
 	mux.HandleFunc("/token", a.handleToken)
 	mux.HandleFunc("/token-data", a.handleTokenData)
 	mux.HandleFunc("/my-ip", func(w http.ResponseWriter, r *http.Request) {

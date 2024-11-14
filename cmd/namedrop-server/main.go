@@ -16,7 +16,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lastlogin-io/obligator"
+	"github.com/lastlogin-net/decent-auth-go"
+	//"github.com/lastlogin-io/obligator"
 	"github.com/takingnames/namedrop-go"
 	//namedropdns "github.com/takingnames/namedrop-libdns"
 	"github.com/libdns/libdns"
@@ -91,20 +92,27 @@ func main() {
 
 	ndServer := namedrop.NewServer(store, provider)
 
+	authPrefix := "/auth"
+	authHandler, err := decentauth.NewHandler(&decentauth.HandlerOptions{
+		Prefix:  authPrefix,
+		KvStore: store,
+	})
+	exitOnError(err)
+
 	mux := http.NewServeMux()
 
-	authUri := fmt.Sprintf("https://login.%s", domain)
-
 	idOrLogin := func(w http.ResponseWriter, r *http.Request) (id string, done bool) {
-		id = r.Header.Get("Remote-Id")
-		if id != adminId {
-			returnUri := fmt.Sprintf("https://%s%s", r.Host, r.RequestURI)
-			uri := fmt.Sprintf("%s/login?return_uri=%s", authUri, url.QueryEscape(returnUri))
-			http.Redirect(w, r, uri, 302)
+
+		fmt.Println(r.URL.RawQuery)
+
+		session, err := authHandler.GetSession(r)
+		if err != nil || session.Id != adminId {
+			http.Redirect(w, r, authPrefix, 303)
 			done = true
 			return
 		}
 
+		id = session.Id
 		return
 	}
 
@@ -112,6 +120,8 @@ func main() {
 	//mut := &sync.Mutex{}
 
 	mux.Handle("/", ndServer)
+
+	mux.Handle(authPrefix+"/", http.StripPrefix(authPrefix, authHandler))
 
 	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
 
@@ -245,38 +255,9 @@ func main() {
 		http.Redirect(w, r, redirUrl, 303)
 	})
 
-	dbPrefix := "auth_"
-	authDb, err := obligator.NewSqliteDatabaseWithDb(db, dbPrefix)
+	fmt.Println("Running")
+	err = http.ListenAndServe(":4004", mux)
 	exitOnError(err)
-
-	ogConfig := obligator.ServerConfig{
-		DbPrefix:               dbPrefix,
-		Database:               authDb,
-		DisplayName:            "NameDrop Server",
-		Port:                   4004,
-		Prefix:                 "namedrop_",
-		ForwardAuthPassthrough: true,
-		Public:                 true,
-		Domains: []string{
-			domain,
-		},
-		//LogoPng:        logoPngBytes,
-		DisableQrLogin: true,
-		OAuth2Providers: []*obligator.OAuth2Provider{
-			&obligator.OAuth2Provider{
-				ID:            "lastlogin",
-				Name:          "LastLogin",
-				URI:           "https://lastlogin.net",
-				ClientID:      authUri,
-				OpenIDConnect: true,
-			},
-		},
-	}
-	ogServer := obligator.NewServer(ogConfig)
-
-	ogServer.ProxyMux(domain, mux)
-
-	ogServer.Start()
 }
 
 //func createProvider(providerId, userId, token string) (libdns.Provider, error) {
