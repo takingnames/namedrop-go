@@ -20,8 +20,10 @@ require (
 	github.com/lastlogin-io/obligator v0.0.0-20241004152347-442aa1afb59a
 	github.com/libdns/libdns v0.2.2
 	github.com/libdns/namedotcom v0.3.3
+	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/mdp/qrterminal/v3 v3.2.0
 	github.com/philippgille/gokv v0.7.0
+	github.com/takingnames/gokv/sqlite v0.0.0-20241110231501-cc717df19c7d
 	golang.org/x/oauth2 v0.23.0
 )
 
@@ -41,7 +43,6 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.0.11 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v1.14.18 // indirect
 	github.com/mholt/acmez v1.0.1 // indirect
 	github.com/miekg/dns v1.1.43 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
@@ -52,7 +53,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
-	github.com/takingnames/gokv/sqlite v0.0.0-20241110225702-e8f450c5941e // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
