@@ -32,7 +32,7 @@ var fs embed.FS
 func main() {
 	domainArg := flag.String("domain", "", "Domain")
 	tempDomainRootArg := flag.String("temp-domain-root", "", "Temporary domain root")
-	adminIdArg := flag.String("admin", "", "Admin email address")
+	adminIdArg := flag.String("admin-id", "", "Admin email address")
 	providerIdArg := flag.String("dns-provider", "", "DNS provider ID")
 	dnsUserId := flag.String("dns-user", "", "DNS user ID")
 	dnsToken := flag.String("dns-token", "", "DNS token")
