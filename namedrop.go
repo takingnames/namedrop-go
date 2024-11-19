@@ -17,9 +17,10 @@ const ScopeHosts = "namedrop-hosts"
 const ScopeMail = "namedrop-mail"
 const ScopeAcme = "namedrop-acme"
 const ScopeAtprotoHandle = "namedrop-atproto-handle"
+const ScopeWeirdHandle = "namedrop-weird-handle"
 
 func validScope(s string) bool {
-	return s == ScopeHosts || s == ScopeMail || s == ScopeAcme || s == ScopeAtprotoHandle
+	return s == ScopeHosts || s == ScopeMail || s == ScopeAcme || s == ScopeAtprotoHandle || s == ScopeWeirdHandle
 }
 
 type Error struct {
@@ -166,6 +167,11 @@ func checkPerm(r *Record, p *Permission) bool {
 		if strings.HasPrefix(r.Host, "_atproto") {
 			return p.Scope == ScopeAtprotoHandle &&
 				strings.HasPrefix(r.Value, "did=") && commonChecks(r, p)
+		}
+
+		if strings.HasPrefix(r.Host, "_weird") {
+			return p.Scope == ScopeWeirdHandle &&
+				strings.HasPrefix(r.Value, "subspace=") && commonChecks(r, p)
 		}
 
 		trimmedValue := strings.TrimSpace(r.Value)
