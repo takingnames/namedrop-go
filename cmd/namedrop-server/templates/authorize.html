@@ -1,36 +1,124 @@
-<h1>Authorize</h1>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<p>
-  <span class='tn-requester-name'>{{.DisplayClientId}}</span> is requesting control over a
-  domain. The following abilities are being requested:
-</p>
+    <style>
 
-<ul>
-  {{ range .PermDescriptions}}
-  <li>{{.}} <span class='domain-placeholder'>the domain</span></li>
-  {{ end }}
-</ul>
+      *, *::before, *::after {
+        box-sizing: border-box;
+        color: var(--text-color);
+        background: var(--background-color);
+      }
 
-<form action="/approved" method="POST">
+      :root {
+        --text-color: #222;
+        --background-color: #eee;
+        --border: 2px solid var(--text-color);
+      }
 
-  <p>
-    To approve, select a domain below
-  </p>
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text-color: #eee;
+          --background-color: #222;
+        }
+      }
 
-  <div>
-    <input type='hidden' name='raw_query' value='{{.RawQuery}}' />
-    <input type="text" id='host-input' name="requested_host" placeholder="Host optional" />
-    <span>.</span>
-    <select id="domain-input" name="requested_domain" required>
-      <option></option>
-      {{ range .Zones }}
-      <option>{{ .Name }}</option>
+      body {
+        font-family: Arial;
+        font-size: 1.2em;
+        margin: 0 auto;
+        max-width: 640px;
+        height: 100vh;
+        padding: 15px;
+        border-left: var(--border);
+        border-right: var(--border);
+      }
+
+      .client-id {
+        font-size: 1.2em;
+      }
+
+      .bold {
+        font-weight: bold;
+      }
+
+    </style>
+  </head>
+  <body>
+    <h1>Authorize</h1>
+
+    <p>
+      <span class='client-id bold'>{{.DisplayClientId}}</span> is requesting control over a
+      domain. The following abilities are being requested:
+    </p>
+
+    <ul>
+      {{ range .PermDescriptions}}
+      <li class='perm-descriptions'>{{.}}</li>
       {{ end }}
-    </select>
-  </div>
+    </ul>
 
-  <div class='tn-button-row'>
-    <button class='button'>Approve</button>
-    <button class='button' formaction="/deny">Deny</button>
-  </div>
-</form>
+    <form action="/approved" method="POST">
+
+      <p>
+        To approve, select a domain below
+      </p>
+
+      <div>
+        <input type='hidden' name='raw_query' value='{{.RawQuery}}' />
+        <input type="text" id='host-input' name="requested_host" placeholder="Host optional" />
+        <span>.</span>
+        <select id="domain-input" name="requested_domain" required>
+          <option></option>
+          {{ range .Zones }}
+          <option>{{ .Name }}</option>
+          {{ end }}
+        </select>
+      </div>
+
+      <div class='tn-button-row'>
+        <button class='button'>Approve</button>
+        <button class='button' formaction="/deny">Deny</button>
+      </div>
+
+      <script>
+
+        const descriptionEls = document.querySelectorAll('.perm-descriptions');
+        for (const el of descriptionEls) {
+          el.innerHTML = el.innerHTML.replaceAll('domain', "<span class='domain'>domain</span>");
+        }
+
+        const domainEls = document.querySelectorAll('.domain');
+
+        const domainInput = document.getElementById('domain-input');
+        const hostInput = document.getElementById('host-input');
+
+        domainInput.addEventListener('change', updateDomain);
+        hostInput.addEventListener('input', updateDomain);
+
+        if (domainInput.value !== '') {
+          updateDomain();
+        }
+        
+        function updateDomain() {
+          const host = hostInput.value;
+          const domain = domainInput.value;
+
+          let fqdn = domain;
+
+          if (host !== '') {
+            fqdn = host + '.' + fqdn;
+          }
+
+          for (const el of domainEls) {
+            el.classList.add('bold');
+            el.innerText = fqdn;
+          }
+        }
+      </script>
+    </form>
+  </body>
+</html>
+

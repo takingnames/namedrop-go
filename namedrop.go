@@ -3,6 +3,7 @@ package namedrop
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -195,6 +196,36 @@ func checkPerm(r *Record, p *Permission) bool {
 
 func commonChecks(r *Record, p *Permission) bool {
 	return r.Domain == p.Domain && strings.HasSuffix(r.Host, p.Host)
+}
+
+func BuildPermDescriptions(requestedPerms []*Permission) (descriptions []string, err error) {
+
+	descriptions = []string{}
+
+	for _, perm := range requestedPerms {
+
+		var description string
+
+		switch perm.Scope {
+		case ScopeHosts:
+			description = "Change the servers domain points to"
+		case ScopeMail:
+			description = "Change mail servers and settings for domain"
+		case ScopeAcme:
+			description = "Obtain security (TLS) certificates for domain"
+		case ScopeAtprotoHandle:
+			description = "Set domain as your Bluesky/atproto handle"
+		case ScopeWeirdHandle:
+			description = "Set domain as your Weird handle"
+		default:
+			errors.New("Unknown scope " + perm.Scope)
+			return
+		}
+
+		descriptions = append(descriptions, description)
+	}
+
+	return descriptions, nil
 }
 
 func printJson(data interface{}) {

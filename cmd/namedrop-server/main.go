@@ -119,7 +119,8 @@ func main() {
 
 	mux.Handle("/", ndServer)
 
-	mux.Handle(authPrefix+"/", http.StripPrefix(authPrefix, authHandler))
+	mux.Handle(authPrefix+"/", authHandler)
+	mux.Handle(authPrefix, authHandler)
 
 	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
 
@@ -152,26 +153,10 @@ func main() {
 			displayClientId = "An app on your device"
 		}
 
-		permDescriptions := []string{}
-
-		for _, perm := range authReq.RequestedPermissions {
-			var description string
-
-			switch perm.Scope {
-			case namedrop.ScopeHosts:
-				description = "Change the servers pointed to by "
-			case namedrop.ScopeMail:
-				description = "Change mail servers and settings for "
-			case namedrop.ScopeAcme:
-				description = "Obtain security (TLS) certificates for "
-			case namedrop.ScopeAtprotoHandle:
-				description = "Set a custom Bluesky/atproto handle for "
-			default:
-				http.Error(w, "Unknown scope "+perm.Scope, 400)
-				return
-			}
-
-			permDescriptions = append(permDescriptions, description)
+		permDescriptions, err := namedrop.BuildPermDescriptions(authReq.RequestedPermissions)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
 		}
 
 		zones, err := provider.ListZones(context.Background())
