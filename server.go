@@ -243,16 +243,18 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 
 		code := r.Form.Get("code")
 
-		codeData := new(PendingToken)
-		found, err := a.store.Get("pending_tokens/"+code, codeData)
+		codeDataBytes, err := a.store.Get("pending_tokens/" + code)
 		if err != nil {
-			w.WriteHeader(500)
-			io.WriteString(w, err.Error())
+			http.Error(w, "No such pending token", 400)
 			return
 		}
 
-		if !found {
-			http.Error(w, "No such pending token", 400)
+		var codeData PendingToken
+
+		err = json.Unmarshal(codeDataBytes, &codeData)
+		if err != nil {
+			w.WriteHeader(500)
+			io.WriteString(w, err.Error())
 			return
 		}
 
@@ -278,16 +280,17 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tokenData := new(TokenData)
-	found, err := a.store.Get("token_data/"+refreshToken, tokenData)
+	tokenDataBytes, err := a.store.Get("token_data/" + refreshToken)
 	if err != nil {
-		w.WriteHeader(500)
-		io.WriteString(w, err.Error())
+		http.Error(w, err.Error(), 400)
 		return
 	}
 
-	if !found {
-		http.Error(w, "Token data not found", 400)
+	var tokenData TokenData
+	err = json.Unmarshal(tokenDataBytes, &tokenData)
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, err.Error())
 		return
 	}
 
@@ -306,7 +309,13 @@ func (a *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	accessToken, _ := genRandomKey()
 	tokenData.Token = accessToken
 
-	err = a.store.Set("token_data/"+accessToken, tokenData)
+	tokenDataBytes, err = json.Marshal(tokenData)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	err = a.store.Set("token_data/"+accessToken, tokenDataBytes)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -346,16 +355,13 @@ func (a *Server) handleTempDomain(w http.ResponseWriter, r *http.Request) {
 
 	host := strings.Replace(ip, replaceChar, "-", -1)
 
-	var zone string
-	found, err := a.store.Get("temp_subdomain_zone", &zone)
+	zoneBytes, err := a.store.Get("temp_subdomain_zone")
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	if !found {
-		http.Error(w, "temp_subdomain_zone not found in store", 500)
-		return
-	}
+
+	zone := string(zoneBytes)
 
 	ctx := context.Background()
 
@@ -401,16 +407,17 @@ func (a *Server) handleTokenData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenData := new(TokenData)
-	found, err := a.store.Get("token_data/"+token, tokenData)
+	tokenDataBytes, err := a.store.Get("token_data/" + token)
 	if err != nil {
-		w.WriteHeader(400)
-		io.WriteString(w, err.Error())
+		http.Error(w, err.Error(), 400)
 		return
 	}
 
-	if !found {
-		http.Error(w, "No such token", 400)
+	var tokenData TokenData
+	err = json.Unmarshal(tokenDataBytes, &tokenData)
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, err.Error())
 		return
 	}
 
@@ -474,7 +481,12 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) (string,
 	tokenData.IssuedAt = time.Now().UTC()
 	tokenData.ExpiresIn = 0
 
-	err = a.store.Set("token_data/"+token, tokenData)
+	tokenDataBytes, err := json.Marshal(tokenData)
+	if err != nil {
+		return "", err
+	}
+
+	err = a.store.Set("token_data/"+token, tokenDataBytes)
 	if err != nil {
 		return "", err
 	}
@@ -490,7 +502,12 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) (string,
 		AuthRequestState: authReqState,
 	}
 
-	err = a.store.Set("pending_tokens/"+code, pendingToken)
+	pendingTokenBytes, err := json.Marshal(pendingToken)
+	if err != nil {
+		return "", err
+	}
+
+	err = a.store.Set("pending_tokens/"+code, pendingTokenBytes)
 	if err != nil {
 		return "", err
 	}
@@ -500,16 +517,20 @@ func (a *Server) CreateCode(tokenData *TokenData, authReqParams string) (string,
 
 func (a *Server) Authorized(request *RecordsRequest) (*RecordsRequest, error) {
 
-	tokenData := new(TokenData)
-	found, err := a.store.Get("token_data/"+request.Token, tokenData)
+	tokenDataBytes, err := a.store.Get("token_data/" + request.Token)
 	if err != nil {
-		return nil, err
-	}
-
-	if !found {
 		return nil, &Error{
 			Message:    "Invalid token",
 			StatusCode: 401,
+		}
+	}
+
+	var tokenData TokenData
+	err = json.Unmarshal(tokenDataBytes, &tokenData)
+	if err != nil {
+		return nil, &Error{
+			Message:    "Error unmarshaling token",
+			StatusCode: 500,
 		}
 	}
 

@@ -11,7 +11,6 @@ import (
 
 	oauth "github.com/anderspitman/little-oauth2-go"
 	"github.com/libdns/libdns"
-	"github.com/philippgille/gokv"
 )
 
 const ScopeHosts = "namedrop-hosts"
@@ -49,7 +48,11 @@ type RecordErrorResponse struct {
 	ConflictingRecords []*Record `json:"conflicting_records,omitempty"`
 }
 
-type KvStore gokv.Store
+type KvStore interface {
+	Get(key string) (value []byte, err error)
+	Set(key string, value []byte) (err error)
+	Delete(key string) (err error)
+}
 
 type DnsProvider interface {
 	libdns.ZoneLister

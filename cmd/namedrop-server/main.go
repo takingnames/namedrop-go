@@ -23,7 +23,6 @@ import (
 	"github.com/libdns/libdns"
 	"github.com/libdns/namedotcom"
 	_ "github.com/mattn/go-sqlite3"
-	store "github.com/takingnames/gokv/sqlite"
 )
 
 //go:embed templates
@@ -79,16 +78,14 @@ func main() {
 	tmpl, err := template.ParseFS(fs, "templates/*")
 	exitOnError(err)
 
-	store, err := store.NewClient(store.Options{
+	store, err := decentauth.NewSqliteKvStore(&decentauth.SqliteKvOptions{
 		TableName: "kv",
 		Db:        db,
 	})
 	exitOnError(err)
 
-	err = store.Set("temp_subdomain_zone", tempDomainRoot)
+	err = store.Set("temp_subdomain_zone", []byte(tempDomainRoot))
 	exitOnError(err)
-
-	defer store.Close()
 
 	ndServer := namedrop.NewServer(store, provider)
 
