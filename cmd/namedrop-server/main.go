@@ -91,6 +91,7 @@ func main() {
 
 	authPrefix := "/auth"
 	authHandler, err := decentauth.NewHandler(&decentauth.HandlerOptions{
+		AdminId: adminId,
 		Prefix:  authPrefix,
 		KvStore: store,
 	})
