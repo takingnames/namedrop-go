@@ -101,8 +101,8 @@ func main() {
 
 	idOrLogin := func(w http.ResponseWriter, r *http.Request) (id string, done bool) {
 
-		session, err := authHandler.GetSession(r)
-		if err != nil || session.Id != adminId {
+		session:= authHandler.GetSession(r)
+		if session == nil || session.Id != adminId {
 			authHandler.LoginRedirect(w, r)
 			done = true
 			return
