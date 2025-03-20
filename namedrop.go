@@ -104,7 +104,7 @@ type Record struct {
 	Type     string `json:"type"`
 	Value    string `json:"value"`
 	TTL      uint32 `json:"ttl"`
-	Priority int    `json:"priority,omitempty"`
+	Priority uint   `json:"priority,omitempty"`
 	Weight   int    `json:"weight,omitempty"`
 }
 

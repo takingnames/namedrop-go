@@ -693,7 +693,7 @@ func libdnsToNamedrop(r libdns.Record, zone string) *Record {
 		Host:     r.Name,
 		Value:    r.Value,
 		TTL:      uint32(r.TTL.Seconds()),
-		Priority: int(r.Priority),
+		Priority: r.Priority,
 		Weight:   int(r.Weight),
 	}
 }
